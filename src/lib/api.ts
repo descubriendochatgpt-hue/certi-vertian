@@ -198,7 +198,7 @@ export async function desmarcarPunto(expedienteId: string, clave: string): Promi
 
 export type TipoAdjunto =
   | 'fichero_calculo' | 'certificado_pdf' | 'certificado_xml' | 'certificado_firmado'
-  | 'informe_conformidad' | 'foto' | 'otro';
+  | 'informe_conformidad' | 'justificante_tasa' | 'declaracion_responsable' | 'foto' | 'otro';
 
 export const NOMBRE_TIPO_ADJUNTO: Record<TipoAdjunto, string> = {
   fichero_calculo: 'Fichero de cálculo (.cex…)',
@@ -206,6 +206,8 @@ export const NOMBRE_TIPO_ADJUNTO: Record<TipoAdjunto, string> = {
   certificado_xml: 'Certificado en XML',
   certificado_firmado: 'Certificado firmado',
   informe_conformidad: 'Informe de conformidad (control externo)',
+  justificante_tasa: 'Justificante de la tasa (modelo 046)',
+  declaracion_responsable: 'Declaración responsable del técnico',
   foto: 'Foto de la visita',
   otro: 'Otro documento',
 };
@@ -241,7 +243,7 @@ async function huella(datos: ArrayBuffer): Promise<string | null> {
 
 /** Nombre seguro para la ruta del almacén; el nombre original se guarda aparte. */
 function nombreSeguro(nombre: string): string {
-  return nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '_').slice(-100) || 'fichero';
+  return nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '_').slice(-100) || 'fichero';
 }
 
 export async function subirAdjunto(expedienteId: string, tipo: TipoAdjunto, fichero: File): Promise<Adjunto> {

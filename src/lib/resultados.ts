@@ -87,8 +87,8 @@ export function aplicarCertificado(r: Resultados, c: DatosCertificado, nombreFic
 }
 
 const igualTexto = (a: string, b: string) =>
-  a.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
-  === b.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  a.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+  === b.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 // ─────────────────────── avisos al registrar resultados ──────────────────────
 

@@ -14,10 +14,11 @@ Herramienta web para organizar el trabajo de emisión de **certificados de efici
 |---|---|
 | 1. Gestión de expedientes (alta, estados, filtros, vencimientos) | ✅ Hecho |
 | 2. Toma de datos en campo (móvil, borrador, guardado automático) | ✅ Hecho |
-| 3. Ficheros para CE3X: fase 1, ficha de introducción · fase 2, `.cex` experimental | ⏳ Pendiente (fase 2: a la espera de proyectos `.cex` de prueba) |
+| 3. Ficheros para CE3X · fase 1: ficha de introducción imprimible | ✅ Hecho |
+| 3. Ficheros para CE3X · fase 2: generar el `.cex` (experimental) | ⏳ A la espera de dos proyectos `.cex` de prueba con su `.xml` |
 | 4. Resultados (importación del PDF de CE3X), checklist previo a la firma y documentos | ✅ Hecho |
-| 5. Paquete de documentación para el registro (sin envío) | ⏳ Pendiente |
-| 6. Panel de recordatorios y estadísticas | ⏳ Pendiente (las alertas de vencimiento ya están en el listado) |
+| 5. Paquete de documentación para el registro de Asturias (sin envío) | ✅ Hecho |
+| 6. Panel (pendientes, visitas, vencimientos, estadísticas) y copia de seguridad completa | ✅ Hecho |
 
 ## Cómo funciona (en una frase)
 
@@ -64,9 +65,11 @@ Necesitas:
 4. Repite lo mismo con [`supabase/migrations/20260923100100_02_seguridad.sql`](supabase/migrations/20260923100100_02_seguridad.sql).
 5. Y con [`supabase/migrations/20260924090000_03_resultados.sql`](supabase/migrations/20260924090000_03_resultados.sql)
    (resultados, checklist y almacén de documentos).
+6. Y con [`supabase/migrations/20260925090000_04_registro.sql`](supabase/migrations/20260925090000_04_registro.sql)
+   (tipos de documento para el registro).
 
-Ejecútalos **en ese orden** y **una sola vez** cada uno. Si ya tenías instalados los dos primeros, ejecuta solo el
-tercero.
+Ejecútalos **en ese orden** y **una sola vez** cada uno. Si ya tenías instalados algunos, ejecuta solo los que
+faltan.
 
 ## Paso 3 · Configurar el acceso
 
@@ -168,6 +171,13 @@ Visita pendiente → Datos introducidos → Cálculo revisado → Certificado fi
   visita distintas, certificado anterior a la visita, sin recomendaciones…) aparece un aviso que debes confirmar.
 - Al pulsar **Confirmar y pasar a «Cálculo revisado»** los resultados quedan congelados.
 
+## Ficha para CE3X
+
+- En la ficha del expediente, **Ficha para CE3X**: todos los datos de la visita ordenados como las pantallas de CE3X
+  (datos administrativos, datos generales, envolvente por tipo de cerramiento, huecos, puentes térmicos,
+  instalaciones, renovables). Puedes elegir coma o punto decimal y **imprimirla o guardarla en PDF**.
+- Es una ayuda para teclear: la app no abre ni controla CE3X.
+
 ## Checklist previo a la firma
 
 - 12 puntos de revisión (referencia catastral, dirección, tipo, superficie, Anexo I, fechas, calificación,
@@ -179,6 +189,31 @@ Visita pendiente → Datos introducidos → Cálculo revisado → Certificado fi
   los resultados confirmados (no se vuelven a teclear).
 - Si devuelves el expediente a «Datos introducidos», el checklist se reinicia.
 
+## Paquete para el registro (Asturias)
+
+- Con el certificado firmado, **Paquete para el registro** reúne lo que pide el trámite RECE0016T01 de la sede
+  electrónica del Principado:
+  - el certificado firmado en PDF;
+  - el XML del programa;
+  - el justificante de la tasa (modelo 046);
+  - la declaración responsable, solo si no estás inscrito en el Registro de técnicos;
+  - el informe de conformidad, si ha habido control externo.
+- Además mete el `.cex` y el XML juntos en un comprimido para tu archivo.
+- Antes de montar el ZIP comprueba que cada fichero no ha cambiado desde que se subió (huella SHA-256), que el PDF
+  tiene una firma electrónica (no valida la firma: eso lo hace la sede) y que el XML tiene la estructura oficial.
+- Descarga un ZIP con un `LEEME.txt` (índice y huellas). **No envía nada**: lo subes tú en la sede y después marcas
+  el expediente como «Registrado».
+
+## Panel
+
+- Al entrar verás el **panel**:
+  - expedientes por estado;
+  - pendientes;
+  - próximas visitas;
+  - vencimientos de los próximos 12 meses (buena ocasión para ofrecer la renovación);
+  - certificados firmados por mes y por año;
+  - calificaciones más frecuentes.
+
 ## Documentos
 
 - En la ficha y en el checklist puedes subir el `.cex`, el PDF, el XML, fotos… (máximo 25 MB por fichero). Se
@@ -189,8 +224,16 @@ Visita pendiente → Datos introducidos → Cálculo revisado → Certificado fi
 
 # Copias de seguridad
 
-El plan gratuito de Supabase **no incluye copias de seguridad descargables**. Hasta que la app tenga su botón de
-«Descargar copia completa» (previsto con el módulo 6), haz una copia manual de vez en cuando:
+El plan gratuito de Supabase **no incluye copias de seguridad descargables**. Por eso el panel tiene el botón
+**«Descargar copia completa»**. Descarga un ZIP con:
+- un listado para Excel;
+- todas las tablas en JSON;
+- todos los documentos de cada expediente.
+
+Si pasa una semana sin copia, el panel te avisa. **Guárdala en un sitio seguro** (contiene datos personales): tu
+ordenador y, a ser posible, un disco externo.
+
+Si prefieres hacerlo a mano desde Supabase:
 
 1. Supabase → **Table Editor** → tabla `expedientes` → botón **Export → Export to CSV**.
 2. Repite con `toma_datos`, `historial_estados`, `resultados` y `checklist_revision`.

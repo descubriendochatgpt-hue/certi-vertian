@@ -232,3 +232,63 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
 .subir-documento label { display: flex; flex-direction: column; gap: 0.25rem; font-weight: 500; flex: 1 1 220px; }
 .tabla td { overflow-wrap: anywhere; }
 @media (max-width: 639px) { .tabla { font-size: 0.85rem; } .tabla th, .tabla td { padding: 0.35rem 0.3rem; } }
+
+/* ───────── módulo 6: panel ───────── */
+
+.tiles { list-style: none; padding: 0; margin: 1rem 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+.tile { display: flex; flex-direction: column; gap: 0.15rem; background: var(--blanco); border: 1px solid var(--borde); border-radius: var(--radio);
+  padding: 0.7rem 0.9rem; color: inherit; text-decoration: none; height: 100%; }
+.tile:hover { border-color: var(--verde); }
+.tile-numero { font-size: 1.8rem; font-weight: 700; line-height: 1.1; }
+.tile-texto { color: var(--suave); font-size: 0.9rem; }
+@media (min-width: 640px) { .tiles { grid-template-columns: repeat(5, 1fr); } }
+
+.lista-panel { list-style: none; padding: 0; margin: 0 0 0.5rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.lista-panel li { background: var(--blanco); border: 1px solid var(--borde); border-radius: var(--radio); padding: 0.45rem 0.75rem; }
+.lista-panel a { text-decoration: none; color: inherit; }
+.lista-panel a:hover { color: var(--verde); }
+
+.copia { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; justify-content: space-between; }
+
+/* Barras: marcas finas, extremo de datos redondeado, 2px de separación, eje discreto. */
+.grafico { margin: 0.5rem 0 1rem; }
+.grafico-area { display: flex; align-items: flex-end; gap: 2px; height: 140px; border-bottom: 1px solid var(--borde); padding-top: 1.2rem; }
+.grafico-columna { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; min-width: 0; }
+.grafico-columna:hover .grafico-barra { filter: brightness(0.9); }
+.grafico-barra { width: 70%; max-width: 36px; border-radius: 4px 4px 0 0; min-height: 0; }
+.grafico-barra:not([class*='letra-']) { background: var(--verde); }
+.grafico-valor { font-size: 0.75rem; color: var(--suave); line-height: 1.2; }
+.grafico-ejes { display: flex; gap: 2px; }
+.grafico-ejes span { flex: 1; text-align: center; font-size: 0.75rem; color: var(--suave); min-width: 0; overflow: hidden; white-space: nowrap; }
+
+/* ───────── módulo 5: paquete ───────── */
+
+.requisitos { list-style: none; padding: 0; margin: 0.5rem 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.requisitos li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.3rem 1rem;
+  border: 1px solid var(--borde); border-radius: var(--radio); padding: 0.5rem 0.75rem; }
+.requisitos li.con-documento { border-color: #9cc9b3; background: #f3faf6; }
+.requisitos li.falta { border-color: #f1b8b3; background: var(--error-fondo); }
+.requisitos select { width: auto; max-width: 100%; }
+.huella { font-family: ui-monospace, Consolas, monospace; font-size: 0.8rem; }
+
+/* ───────── módulo 3: ficha para CE3X ───────── */
+
+.bloque-ficha { break-inside: avoid-page; }
+.bloque-ficha h3 { font-size: 1rem; margin: 1rem 0 0.25rem; }
+.falta-dato { color: var(--aviso); }
+
+@media print {
+  .cabecera, .pie, .no-imprimir { display: none !important; }
+  body { background: #fff; font-size: 11pt; }
+  .pagina { max-width: none; padding: 0; }
+  .tabla-desplazable { overflow: visible; }
+  .tabla { font-size: 9pt; }
+  .tabla th, .tabla td { padding: 0.15rem 0.3rem; }
+  .caja { border: 1px solid #999; }
+  a { color: inherit; text-decoration: none; }
+}
+
+@media (max-width: 639px) {
+  .ficha .datos { grid-template-columns: 1fr; gap: 0; }
+  .ficha .datos dt { font-size: 0.85rem; margin-top: 0.4rem; }
+}

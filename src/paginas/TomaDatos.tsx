@@ -129,7 +129,7 @@ export function TomaDatos() {
   );
 
   if (cargando) return <main className="pagina"><p className="cargando">Cargando…</p></main>;
-  if (!exp) return <main className="pagina"><div className="caja error">{error}</div><Link to="/">← Volver</Link></main>;
+  if (!exp) return <main className="pagina"><div className="caja error">{error}</div><Link to="/expedientes">← Volver</Link></main>;
 
   const avisosPendientes = comprobacion.avisos.filter((a) => !confirmados.has(a.clave));
   const visitaFutura = exp.fecha_visita ? diasHasta(exp.fecha_visita) > 0 : false;

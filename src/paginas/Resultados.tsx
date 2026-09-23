@@ -59,7 +59,7 @@ export function Resultados() {
   const comprobacion = useMemo(() => (exp ? avisosResultados(r, exp) : { errores: [], avisos: [] }), [r, exp]);
 
   if (cargando) return <main className="pagina"><p className="cargando">Cargando…</p></main>;
-  if (!exp) return <main className="pagina"><div className="caja error">{error}</div><Link to="/">← Volver</Link></main>;
+  if (!exp) return <main className="pagina"><div className="caja error">{error}</div><Link to="/expedientes">← Volver</Link></main>;
 
   const editable = exp.estado === 'datos_introducidos';
   const cambiar = (parcial: Partial<Datos>) => { setR((x) => ({ ...x, ...parcial })); setSucio(true); setMensaje(''); };

@@ -17,7 +17,8 @@ export function Marco() {
       <header className="cabecera">
         <NavLink to="/" className="marca">Certificados CEE</NavLink>
         <nav>
-          <NavLink to="/" end>Expedientes</NavLink>
+          <NavLink to="/" end>Panel</NavLink>
+          <NavLink to="/expedientes" end>Expedientes</NavLink>
           <NavLink to="/expedientes/nuevo">+ Nuevo</NavLink>
           <NavLink to="/aviso-legal">Aviso legal</NavLink>
           <button className="enlace" onClick={salir}>Salir</button>

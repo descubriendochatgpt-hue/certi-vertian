@@ -15,6 +15,8 @@ function tipoPorNombre(nombre: string): TipoAdjunto {
   const n = nombre.toLowerCase();
   if (/\.(cex|ce3|cte|ctehexml|cerma|xml\.cex)$/.test(n)) return 'fichero_calculo';
   if (n.endsWith('.xml')) return 'certificado_xml';
+  if (n.endsWith('.pdf') && /046|tasa|justificante/.test(n)) return 'justificante_tasa';
+  if (n.endsWith('.pdf') && /declaraci/.test(n)) return 'declaracion_responsable';
   if (n.endsWith('.pdf')) return /firmad|signed|_firma/.test(n) ? 'certificado_firmado' : 'certificado_pdf';
   if (/\.(jpe?g|png|heic|webp)$/.test(n)) return 'foto';
   return 'otro';

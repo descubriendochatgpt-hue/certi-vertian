@@ -44,14 +44,14 @@ export function DetalleExpediente() {
   useEffect(() => { cargar(); }, [cargar]);
 
   if (cargando) return <main className="pagina"><p className="cargando">Cargando…</p></main>;
-  if (!e) return <main className="pagina"><div className="caja error">{error}</div><Link to="/">← Volver</Link></main>;
+  if (!e) return <main className="pagina"><div className="caja error">{error}</div><Link to="/expedientes">← Volver</Link></main>;
 
   const siguiente = siguienteEstado(e.estado);
   const anterior = estadoAnterior(e.estado);
 
   return (
     <main className="pagina">
-      <p><Link to="/">← Expedientes</Link></p>
+      <p><Link to="/expedientes">← Expedientes</Link></p>
       <div className="titulo-con-accion">
         <h1>{e.codigo}</h1>
         <EtiquetaEstado estado={e.estado} />
@@ -71,6 +71,7 @@ export function DetalleExpediente() {
           <>
             <p><strong>Siguiente paso:</strong> hacer el cálculo en el programa oficial y registrar aquí sus resultados (puedes importarlos del PDF del certificado).</p>
             <div className="acciones">
+              <Link to={`/expedientes/${e.id}/ficha-ce3x`} className="boton">Ficha para CE3X</Link>
               <Link to={`/expedientes/${e.id}/resultados`} className="boton principal">Resultados del cálculo</Link>
               <Link to={`/expedientes/${e.id}/toma-datos`} className="boton">Ver datos de la visita</Link>
             </div>
@@ -91,7 +92,9 @@ export function DetalleExpediente() {
           <>
             {siguiente ? <p><strong>Siguiente paso:</strong> {NOMBRE_ESTADO[siguiente]}.</p> : <p><strong>Expediente completado.</strong> Certificado registrado.</p>}
             <div className="acciones">
-              {siguiente && <button className="principal" onClick={() => setAccion('avanzar')}>Confirmar: {NOMBRE_ESTADO[siguiente]}…</button>}
+              {siguiente && <Link to={`/expedientes/${e.id}/paquete`} className="boton principal">Paquete para el registro</Link>}
+              {siguiente && <button onClick={() => setAccion('avanzar')}>Confirmar: {NOMBRE_ESTADO[siguiente]}…</button>}
+              {!siguiente && <Link to={`/expedientes/${e.id}/paquete`} className="boton">Paquete para el registro</Link>}
               <Link to={`/expedientes/${e.id}/revision`} className="boton">Ver checklist</Link>
             </div>
           </>
@@ -99,6 +102,7 @@ export function DetalleExpediente() {
         {e.estado !== 'visita_pendiente' && (
           <p className="enlaces-secundarios">
             <Link to={`/expedientes/${e.id}/toma-datos`}>Datos de la visita</Link>
+            {' · '}<Link to={`/expedientes/${e.id}/ficha-ce3x`}>Ficha para CE3X</Link>
             {e.estado !== 'datos_introducidos' && <> · <Link to={`/expedientes/${e.id}/resultados`}>Resultados</Link></>}
           </p>
         )}
@@ -153,7 +157,7 @@ export function DetalleExpediente() {
         {e.estado === 'visita_pendiente' && <button className="peligro" onClick={() => setAccion('borrar')}>Borrar expediente…</button>}
       </div>
       {accion === 'borrar' && (
-        <DialogoBorrar expediente={e} onCerrar={() => setAccion(null)} onHecho={() => navegar('/')} />
+        <DialogoBorrar expediente={e} onCerrar={() => setAccion(null)} onHecho={() => navegar('/expedientes')} />
       )}
 
       <Documentos expedienteId={e.id} adjuntos={adjuntos} soloLectura={e.estado === 'registrado'}

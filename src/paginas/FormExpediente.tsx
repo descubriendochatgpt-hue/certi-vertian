@@ -141,7 +141,7 @@ export function FormExpediente() {
 
   return (
     <main className="pagina">
-      <p><Link to={id ? `/expedientes/${id}` : '/'}>← Volver</Link></p>
+      <p><Link to={id ? `/expedientes/${id}` : '/expedientes'}>← Volver</Link></p>
       <h1>{id ? 'Editar expediente' : 'Nuevo expediente'}</h1>
 
       <form onSubmit={guardar} className="formulario" noValidate>
@@ -187,7 +187,7 @@ export function FormExpediente() {
         {error && <div className="caja error">{error}</div>}
         <div className="acciones">
           <button type="submit" className="principal" disabled={enviando}>{enviando ? 'Guardando…' : 'Guardar'}</button>
-          <Link to={id ? `/expedientes/${id}` : '/'} className="boton">Cancelar</Link>
+          <Link to={id ? `/expedientes/${id}` : '/expedientes'} className="boton">Cancelar</Link>
         </div>
       </form>
     </main>

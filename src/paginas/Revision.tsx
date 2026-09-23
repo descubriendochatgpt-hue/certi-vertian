@@ -41,7 +41,7 @@ export function Revision() {
   useEffect(() => { cargar(); }, [cargar]);
 
   if (cargando) return <main className="pagina"><p className="cargando">Cargando…</p></main>;
-  if (!exp) return <main className="pagina"><div className="caja error">{error}</div><Link to="/">← Volver</Link></main>;
+  if (!exp) return <main className="pagina"><div className="caja error">{error}</div><Link to="/expedientes">← Volver</Link></main>;
 
   const editable = exp.estado === 'calculo_revisado';
   const apoyo = comprobacionesDeApoyo({ expediente: exp, toma, resultados: res, tiposAdjuntos: adjuntos.map((a) => a.tipo) });
