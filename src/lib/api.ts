@@ -5,6 +5,7 @@ import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { AnotacionHistorial, Calificacion, Estado, Expediente } from './estados';
 import { type TomaDatos, VERSION_ESQUEMA, normalizarTomaDatos } from './tomaDatos';
+import { type Resultados, resultadosVacios } from './resultados';
 
 export class ErrorDatos extends Error {}
 
@@ -141,4 +142,136 @@ export async function guardarTomaDatos(expedienteId: string, datos: TomaDatos, a
       .select('actualizado_en').single(),
   ) as { actualizado_en: string };
   return r.actualizado_en;
+}
+
+// ──────────────────────────── Resultados (módulo 4) ───────────────────────
+
+export async function obtenerResultados(expedienteId: string): Promise<Resultados | null> {
+  const r = comprobar(await supabase.from('resultados').select('*').eq('expediente_id', expedienteId).maybeSingle()) as
+    (Resultados & { expediente_id: string }) | null;
+  if (!r) return null;
+  const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+  return {
+    ...resultadosVacios(), ...r,
+    consumo_ep_nr: n(r.consumo_ep_nr), emisiones_co2: n(r.emisiones_co2),
+    demanda_calefaccion: n(r.demanda_calefaccion), demanda_refrigeracion: n(r.demanda_refrigeracion),
+    recomendaciones: Array.isArray(r.recomendaciones) ? r.recomendaciones : [],
+    detalle: r.detalle && typeof r.detalle === 'object' ? r.detalle : {},
+  };
+}
+
+export async function guardarResultados(expedienteId: string, r: Resultados): Promise<void> {
+  const { confirmado_en: _c, actualizado_en: _a, ...datos } = r;
+  comprobar(await supabase.from('resultados').upsert({ ...datos, expediente_id: expedienteId }).select('expediente_id'));
+}
+
+export interface PuntoChecklist {
+  clave: string;
+  orden: number;
+  texto: string;
+  marcado_en: string | null;
+  nota: string | null;
+}
+
+export async function obtenerChecklist(expedienteId: string): Promise<PuntoChecklist[]> {
+  const [items, marcas] = await Promise.all([
+    supabase.from('checklist_items').select('clave, orden, texto').order('orden'),
+    supabase.from('checklist_revision').select('clave, marcado_en, nota').eq('expediente_id', expedienteId),
+  ]);
+  const its = comprobar(items) as { clave: string; orden: number; texto: string }[];
+  const ms = comprobar(marcas) as { clave: string; marcado_en: string; nota: string | null }[];
+  return its.map((i) => {
+    const m = ms.find((x) => x.clave === i.clave);
+    return { ...i, marcado_en: m?.marcado_en ?? null, nota: m?.nota ?? null };
+  });
+}
+
+export async function marcarPunto(expedienteId: string, clave: string, nota: string | null): Promise<void> {
+  comprobar(await supabase.from('checklist_revision').insert({ expediente_id: expedienteId, clave, nota }).select('clave'));
+}
+
+export async function desmarcarPunto(expedienteId: string, clave: string): Promise<void> {
+  comprobar(await supabase.from('checklist_revision').delete().eq('expediente_id', expedienteId).eq('clave', clave).select('clave'));
+}
+
+// ─────────────────────────────── Documentos ───────────────────────────────
+
+export type TipoAdjunto =
+  | 'fichero_calculo' | 'certificado_pdf' | 'certificado_xml' | 'certificado_firmado'
+  | 'informe_conformidad' | 'foto' | 'otro';
+
+export const NOMBRE_TIPO_ADJUNTO: Record<TipoAdjunto, string> = {
+  fichero_calculo: 'Fichero de cálculo (.cex…)',
+  certificado_pdf: 'Certificado en PDF (sin firmar)',
+  certificado_xml: 'Certificado en XML',
+  certificado_firmado: 'Certificado firmado',
+  informe_conformidad: 'Informe de conformidad (control externo)',
+  foto: 'Foto de la visita',
+  otro: 'Otro documento',
+};
+
+export interface Adjunto {
+  id: string;
+  expediente_id: string;
+  tipo: TipoAdjunto;
+  nombre: string;
+  ruta: string;
+  tamano: number;
+  tipo_mime: string | null;
+  sha256: string | null;
+  subido_en: string;
+}
+
+const CUBO = 'documentos';
+/** Límite por fichero (el mismo que tiene el almacén). */
+export const TAMANO_MAXIMO = 25 * 1024 * 1024;
+
+export async function listarAdjuntos(expedienteId: string): Promise<Adjunto[]> {
+  return comprobar(await supabase.from('adjuntos').select('*').eq('expediente_id', expedienteId).order('subido_en')) as Adjunto[];
+}
+
+async function huella(datos: ArrayBuffer): Promise<string | null> {
+  try {
+    const h = await crypto.subtle.digest('SHA-256', datos);
+    return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return null;
+  }
+}
+
+/** Nombre seguro para la ruta del almacén; el nombre original se guarda aparte. */
+function nombreSeguro(nombre: string): string {
+  return nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '_').slice(-100) || 'fichero';
+}
+
+export async function subirAdjunto(expedienteId: string, tipo: TipoAdjunto, fichero: File): Promise<Adjunto> {
+  if (fichero.size > TAMANO_MAXIMO) throw new ErrorDatos(`El fichero pesa ${(fichero.size / 1048576).toFixed(1)} MB; el máximo son 25 MB.`);
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new ErrorDatos('La sesión ha caducado. Vuelve a entrar.');
+  const id = crypto.randomUUID();
+  const ruta = `${session.user.id}/${expedienteId}/${id}-${nombreSeguro(fichero.name)}`;
+  const datos = await fichero.arrayBuffer();
+  const subida = await supabase.storage.from(CUBO).upload(ruta, fichero, { contentType: fichero.type || 'application/octet-stream', upsert: false });
+  if (subida.error) throw traducir(subida.error);
+  try {
+    return comprobar(await supabase.from('adjuntos').insert({
+      id, expediente_id: expedienteId, tipo, nombre: fichero.name, ruta, tamano: fichero.size,
+      tipo_mime: fichero.type || null, sha256: await huella(datos),
+    }).select().single()) as Adjunto;
+  } catch (e) {
+    await supabase.storage.from(CUBO).remove([ruta]);   // no dejar ficheros huérfanos
+    throw e;
+  }
+}
+
+export async function descargarAdjunto(a: Adjunto): Promise<Blob> {
+  const { data, error } = await supabase.storage.from(CUBO).download(a.ruta);
+  if (error || !data) throw traducir(error ?? new Error('No se ha podido descargar.'));
+  return data;
+}
+
+export async function borrarAdjunto(a: Adjunto): Promise<void> {
+  const filas = comprobar(await supabase.from('adjuntos').delete().eq('id', a.id).select('id')) as { id: string }[];
+  if (filas.length === 0) throw new ErrorDatos('Este documento ya no se puede borrar (el expediente está registrado).');
+  await supabase.storage.from(CUBO).remove([a.ruta]);
 }

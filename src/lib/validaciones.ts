@@ -188,7 +188,7 @@ export const CONCEJOS_ASTURIAS = [
 ];
 
 function sinTildes(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
 export function comprobarConcejo(v: string): Comprobacion {

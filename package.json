@@ -14,11 +14,13 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.0",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router": "^7.9.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.4",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^6.1.1",

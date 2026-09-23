@@ -1,8 +1,12 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { borrarExpediente, cambiarEstado, historial, obtenerExpediente } from '../lib/api';
 import {
-  type AnotacionHistorial, CALIFICACIONES, type Calificacion as Letra, DECLARACION_ESTADO, type Estado,
+  type Adjunto, borrarExpediente, cambiarEstado, historial, listarAdjuntos, obtenerChecklist, obtenerExpediente, obtenerResultados,
+} from '../lib/api';
+import type { Resultados } from '../lib/resultados';
+import { Documentos } from '../componentes/Documentos';
+import {
+  type AnotacionHistorial, DECLARACION_ESTADO, type Estado,
   type Expediente, NOMBRE_ESTADO, NOMBRE_TIPO_EDIFICIO, estadoAnterior, siguienteEstado,
 } from '../lib/estados';
 import { fecha, fechaHora, hoyIso } from '../lib/fechas';
@@ -17,12 +21,18 @@ export function DetalleExpediente() {
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(true);
   const [accion, setAccion] = useState<'avanzar' | 'retroceder' | 'borrar' | null>(null);
+  const [res, setRes] = useState<Resultados | null>(null);
+  const [adjuntos, setAdjuntos] = useState<Adjunto[]>([]);
+  const [checklist, setChecklist] = useState<{ hechos: number; total: number }>({ hechos: 0, total: 0 });
 
   const cargar = useCallback(async () => {
     try {
-      const [exp, h] = await Promise.all([obtenerExpediente(id), historial(id)]);
+      const [exp, h, r, a, c] = await Promise.all([obtenerExpediente(id), historial(id), obtenerResultados(id), listarAdjuntos(id), obtenerChecklist(id)]);
       setE(exp);
       setHist(h);
+      setRes(r);
+      setAdjuntos(a);
+      setChecklist({ hechos: c.filter((p) => p.marcado_en).length, total: c.length });
       if (!exp) setError('Expediente no encontrado.');
     } catch (err) {
       setError((err as Error).message);
@@ -51,20 +61,46 @@ export function DetalleExpediente() {
       <PasosEstado estado={e.estado} />
 
       <section className="caja siguiente-paso">
-        {e.estado === 'visita_pendiente' ? (
+        {e.estado === 'visita_pendiente' && (
           <>
             <p><strong>Siguiente paso:</strong> rellenar la toma de datos de la visita y, una vez revisada, verificarla.</p>
             <Link to={`/expedientes/${e.id}/toma-datos`} className="boton principal">Toma de datos de la visita</Link>
           </>
-        ) : (
+        )}
+        {e.estado === 'datos_introducidos' && (
           <>
-            {siguiente && <p><strong>Siguiente paso:</strong> {NOMBRE_ESTADO[siguiente]}.</p>}
-            {!siguiente && <p><strong>Expediente completado.</strong> Certificado registrado.</p>}
+            <p><strong>Siguiente paso:</strong> hacer el cálculo en el programa oficial y registrar aquí sus resultados (puedes importarlos del PDF del certificado).</p>
             <div className="acciones">
-              {siguiente && <button className="principal" onClick={() => setAccion('avanzar')}>Confirmar: {NOMBRE_ESTADO[siguiente]}…</button>}
+              <Link to={`/expedientes/${e.id}/resultados`} className="boton principal">Resultados del cálculo</Link>
               <Link to={`/expedientes/${e.id}/toma-datos`} className="boton">Ver datos de la visita</Link>
             </div>
           </>
+        )}
+        {e.estado === 'calculo_revisado' && (
+          <>
+            <p><strong>Siguiente paso:</strong> completar el checklist de revisión ({checklist.hechos} de {checklist.total}), firmar el certificado y marcarlo como firmado.</p>
+            <div className="acciones">
+              <Link to={`/expedientes/${e.id}/revision`} className={`boton ${checklist.hechos < checklist.total ? 'principal' : ''}`}>Checklist de revisión</Link>
+              <button className={checklist.hechos === checklist.total ? 'principal' : ''} disabled={checklist.total === 0 || checklist.hechos < checklist.total}
+                      onClick={() => setAccion('avanzar')}>Confirmar: Certificado firmado…</button>
+            </div>
+            {checklist.hechos < checklist.total && <p className="suave">Para marcarlo como firmado hay que completar antes el checklist.</p>}
+          </>
+        )}
+        {(e.estado === 'certificado_firmado' || e.estado === 'registrado') && (
+          <>
+            {siguiente ? <p><strong>Siguiente paso:</strong> {NOMBRE_ESTADO[siguiente]}.</p> : <p><strong>Expediente completado.</strong> Certificado registrado.</p>}
+            <div className="acciones">
+              {siguiente && <button className="principal" onClick={() => setAccion('avanzar')}>Confirmar: {NOMBRE_ESTADO[siguiente]}…</button>}
+              <Link to={`/expedientes/${e.id}/revision`} className="boton">Ver checklist</Link>
+            </div>
+          </>
+        )}
+        {e.estado !== 'visita_pendiente' && (
+          <p className="enlaces-secundarios">
+            <Link to={`/expedientes/${e.id}/toma-datos`}>Datos de la visita</Link>
+            {e.estado !== 'datos_introducidos' && <> · <Link to={`/expedientes/${e.id}/resultados`}>Resultados</Link></>}
+          </p>
         )}
         {anterior && (
           <p><button className="enlace" onClick={() => setAccion('retroceder')}>Devolver a «{NOMBRE_ESTADO[anterior]}»…</button></p>
@@ -72,7 +108,7 @@ export function DetalleExpediente() {
       </section>
 
       {accion === 'avanzar' && siguiente && (
-        <DialogoAvanzar expediente={e} destino={siguiente} onCerrar={() => setAccion(null)} onHecho={() => { setAccion(null); cargar(); }} />
+        <DialogoAvanzar expediente={e} destino={siguiente} resultados={res} onCerrar={() => setAccion(null)} onHecho={() => { setAccion(null); cargar(); }} />
       )}
       {accion === 'retroceder' && anterior && (
         <DialogoRetroceder expediente={e} destino={anterior} onCerrar={() => setAccion(null)} onHecho={() => { setAccion(null); cargar(); }} />
@@ -101,7 +137,9 @@ export function DetalleExpediente() {
           </dl>
           <h2>Certificado</h2>
           <dl className="datos">
-            <dt>Calificación</dt><dd>Consumo <Calificacion letra={e.calificacion_consumo} /> · Emisiones <Calificacion letra={e.calificacion_emisiones} /></dd>
+            <dt>Calificación</dt><dd>{res?.calificacion_consumo
+              ? <>Consumo <Calificacion letra={res.calificacion_consumo} /> {res.consumo_ep_nr !== null && `${formatearNumero(res.consumo_ep_nr)} kWh/m²·año`} · Emisiones <Calificacion letra={res.calificacion_emisiones} /> {res.emisiones_co2 !== null && `${formatearNumero(res.emisiones_co2)} kgCO₂/m²·año`}{!res.confirmado_en && <span className="suave"> (sin confirmar)</span>}</>
+              : <>—</>}</dd>
             <dt>Fecha de firma</dt><dd>{fecha(e.fecha_firma)}</dd>
             <dt>Vence</dt><dd>{fecha(e.fecha_vencimiento)}</dd>
             <dt>Registro</dt><dd>{e.fecha_registro ? `${fecha(e.fecha_registro)}${e.numero_registro ? ` · nº ${e.numero_registro}` : ''}` : '—'}</dd>
@@ -117,6 +155,9 @@ export function DetalleExpediente() {
       {accion === 'borrar' && (
         <DialogoBorrar expediente={e} onCerrar={() => setAccion(null)} onHecho={() => navegar('/')} />
       )}
+
+      <Documentos expedienteId={e.id} adjuntos={adjuntos} soloLectura={e.estado === 'registrado'}
+                  onCambio={() => listarAdjuntos(e.id).then(setAdjuntos).catch((err: Error) => setError(err.message))} />
 
       <section>
         <h2>Historial</h2>
@@ -154,11 +195,9 @@ function Dialogo({ titulo, children, onCerrar }: { titulo: string; children: Rea
 
 interface PropsDialogo { expediente: Expediente; onCerrar: () => void; onHecho: () => void }
 
-function DialogoAvanzar({ expediente: e, destino, onCerrar, onHecho }: PropsDialogo & { destino: Estado }) {
+function DialogoAvanzar({ expediente: e, destino, resultados, onCerrar, onHecho }: PropsDialogo & { destino: Estado; resultados: Resultados | null }) {
   const [declarado, setDeclarado] = useState(false);
   const [fechaAccion, setFechaAccion] = useState(hoyIso());
-  const [consumo, setConsumo] = useState<Letra | ''>('');
-  const [emisiones, setEmisiones] = useState<Letra | ''>('');
   const [numero, setNumero] = useState('');
   const [nota, setNota] = useState('');
   const [error, setError] = useState('');
@@ -168,15 +207,12 @@ function DialogoAvanzar({ expediente: e, destino, onCerrar, onHecho }: PropsDial
     ev.preventDefault();
     setError('');
     if (!declarado) { setError('Marca la casilla de confirmación.'); return; }
-    if (destino === 'certificado_firmado' && (!consumo || !emisiones)) { setError('Indica las dos calificaciones.'); return; }
     setEnviando(true);
     try {
       await cambiarEstado(e.id, {
         destino,
         nota: nota.trim() || undefined,
         fecha: destino === 'certificado_firmado' || destino === 'registrado' ? fechaAccion : undefined,
-        calificacionConsumo: consumo || undefined,
-        calificacionEmisiones: emisiones || undefined,
         numeroRegistro: numero.trim() || undefined,
       });
       onHecho();
@@ -189,27 +225,14 @@ function DialogoAvanzar({ expediente: e, destino, onCerrar, onHecho }: PropsDial
   return (
     <Dialogo titulo={`Pasar a «${NOMBRE_ESTADO[destino]}»`} onCerrar={onCerrar}>
       <form onSubmit={confirmar} className="formulario">
-        {destino === 'calculo_revisado' && (
-          <p className="suave">El cálculo se hace en el programa oficial (CE3X, CE3, CERMA…), fuera de esta herramienta. En el módulo 4 podrás registrar aquí sus resultados.</p>
-        )}
         {destino === 'certificado_firmado' && (
           <>
+            <p>Calificación que constará en el certificado (de los resultados confirmados):{' '}
+              Consumo <Calificacion letra={resultados?.calificacion_consumo ?? null} /> · Emisiones <Calificacion letra={resultados?.calificacion_emisiones ?? null} /></p>
             <label>Fecha de firma
               <input type="date" required value={fechaAccion} max={hoyIso()} onChange={(ev) => setFechaAccion(ev.target.value)} />
             </label>
-            <div className="fila-campos">
-              <label>Calificación de consumo
-                <select required value={consumo} onChange={(ev) => setConsumo(ev.target.value as Letra)}>
-                  <option value="">—</option>{CALIFICACIONES.map((l) => <option key={l}>{l}</option>)}
-                </select>
-              </label>
-              <label>Calificación de emisiones
-                <select required value={emisiones} onChange={(ev) => setEmisiones(ev.target.value as Letra)}>
-                  <option value="">—</option>{CALIFICACIONES.map((l) => <option key={l}>{l}</option>)}
-                </select>
-              </label>
-            </div>
-            {(consumo === 'G' || emisiones === 'G') && <p className="nota-aviso">Con calificación G la validez es de 5 años.</p>}
+            {(resultados?.calificacion_consumo === 'G' || resultados?.calificacion_emisiones === 'G') && <p className="nota-aviso">Con calificación G la validez es de 5 años.</p>}
           </>
         )}
         {destino === 'registrado' && (

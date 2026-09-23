@@ -8,6 +8,8 @@ import { FormExpediente } from './paginas/FormExpediente';
 import { DetalleExpediente } from './paginas/DetalleExpediente';
 import { TomaDatos } from './paginas/TomaDatos';
 import { AvisoLegal } from './paginas/AvisoLegal';
+import { Resultados } from './paginas/Resultados';
+import { Revision } from './paginas/Revision';
 
 export function App() {
   if (!configuracionCompleta) {
@@ -31,6 +33,8 @@ export function App() {
           <Route path="expedientes/:id" element={<DetalleExpediente />} />
           <Route path="expedientes/:id/editar" element={<FormExpediente />} />
           <Route path="expedientes/:id/toma-datos" element={<TomaDatos />} />
+          <Route path="expedientes/:id/resultados" element={<Resultados />} />
+          <Route path="expedientes/:id/revision" element={<Revision />} />
           <Route path="aviso-legal" element={<AvisoLegal />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -14,8 +14,8 @@ Herramienta web para organizar el trabajo de emisión de **certificados de efici
 |---|---|
 | 1. Gestión de expedientes (alta, estados, filtros, vencimientos) | ✅ Hecho |
 | 2. Toma de datos en campo (móvil, borrador, guardado automático) | ✅ Hecho |
-| 3. Generador de ficheros de entrada para el programa de certificación | ⏳ Pendiente (necesita saber qué programa y formato usas) |
-| 4. Resultados y checklist previo a la firma | ⏳ Pendiente |
+| 3. Ficheros para CE3X: fase 1, ficha de introducción · fase 2, `.cex` experimental | ⏳ Pendiente (fase 2: a la espera de proyectos `.cex` de prueba) |
+| 4. Resultados (importación del PDF de CE3X), checklist previo a la firma y documentos | ✅ Hecho |
 | 5. Paquete de documentación para el registro (sin envío) | ⏳ Pendiente |
 | 6. Panel de recordatorios y estadísticas | ⏳ Pendiente (las alertas de vencimiento ya están en el listado) |
 
@@ -62,8 +62,11 @@ Necesitas:
    pulsa el botón **Copy raw file** (icono de copiar), pégalo en el editor de Supabase y pulsa **Run**.
    Debe decir *Success. No rows returned*.
 4. Repite lo mismo con [`supabase/migrations/20260923100100_02_seguridad.sql`](supabase/migrations/20260923100100_02_seguridad.sql).
+5. Y con [`supabase/migrations/20260924090000_03_resultados.sql`](supabase/migrations/20260924090000_03_resultados.sql)
+   (resultados, checklist y almacén de documentos).
 
-Ejecútalos **en ese orden** y **una sola vez** cada uno.
+Ejecútalos **en ese orden** y **una sola vez** cada uno. Si ya tenías instalados los dos primeros, ejecuta solo el
+tercero.
 
 ## Paso 3 · Configurar el acceso
 
@@ -137,7 +140,7 @@ Visita pendiente → Datos introducidos → Cálculo revisado → Certificado fi
 - **Ningún paso es automático.** Cada uno se confirma con un botón y una casilla de declaración, y queda anotado en
   el historial con fecha y hora.
 - Se puede **devolver** un expediente al estado anterior indicando el motivo (queda en el historial).
-- Al marcar **Certificado firmado** se piden la fecha de firma y las calificaciones; la app calcula el
+- Al marcar **Certificado firmado** se pide la fecha de firma (las calificaciones salen de los resultados); la app calcula el
   **vencimiento**: 10 años, o 5 si alguna calificación es G. El listado avisa de los vencimientos con 6 meses de
   antelación.
 - Solo se pueden **borrar** expedientes en «Visita pendiente».
@@ -154,6 +157,34 @@ Visita pendiente → Datos introducidos → Cálculo revisado → Certificado fi
 - Cuando todo está revisado, pulsa **Verificar y pasar a «Datos introducidos»**. Desde ese momento los datos quedan
   **congelados**; para corregirlos hay que devolver el expediente a «Visita pendiente».
 
+## Resultados del cálculo
+
+- Cuando hayas calculado en CE3X, abre **Resultados del cálculo** y elige el **PDF del certificado**. Se lee en tu
+  propio dispositivo (no se envía a ningún sitio) y la app te enseña lo leído al lado de los datos del expediente.
+  Solo si pulsas **Usar estos valores** se pasan al formulario, donde puedes corregir cualquier cosa.
+- También puedes teclear los resultados a mano.
+- Recomendaciones de mejora: añádelas una a una o, si no hay medidas viables, escribe la justificación.
+- Si algo no cuadra (letra que no corresponde a la escala del propio certificado, referencia catastral o fecha de
+  visita distintas, certificado anterior a la visita, sin recomendaciones…) aparece un aviso que debes confirmar.
+- Al pulsar **Confirmar y pasar a «Cálculo revisado»** los resultados quedan congelados.
+
+## Checklist previo a la firma
+
+- 12 puntos de revisión (referencia catastral, dirección, tipo, superficie, Anexo I, fechas, calificación,
+  recomendaciones, fichero de cálculo adjunto, PDF adjunto, datos del técnico).
+- Junto a cada punto, una **comprobación de apoyo** (✓ coincide / ⚠ revisar) calculada con el PDF importado. Es solo
+  una ayuda: **ningún punto se marca solo**. Si marcas uno que señala una diferencia, la app te pide confirmarlo y lo
+  anota.
+- Sin los 12 puntos marcados no se puede pasar a «Certificado firmado». Al firmar, las calificaciones se toman de
+  los resultados confirmados (no se vuelven a teclear).
+- Si devuelves el expediente a «Datos introducidos», el checklist se reinicia.
+
+## Documentos
+
+- En la ficha y en el checklist puedes subir el `.cex`, el PDF, el XML, fotos… (máximo 25 MB por fichero). Se
+  guardan en el almacén privado de Supabase; solo tú puedes verlos.
+- Los documentos de un expediente **registrado** ya no se pueden borrar.
+
 ---
 
 # Copias de seguridad
@@ -162,7 +193,8 @@ El plan gratuito de Supabase **no incluye copias de seguridad descargables**. Ha
 «Descargar copia completa» (previsto con el módulo 6), haz una copia manual de vez en cuando:
 
 1. Supabase → **Table Editor** → tabla `expedientes` → botón **Export → Export to CSV**.
-2. Repite con `toma_datos` e `historial_estados`.
+2. Repite con `toma_datos`, `historial_estados`, `resultados` y `checklist_revision`.
+   Los documentos se descargan uno a uno desde la ficha del expediente (o en Supabase → **Storage** → `documentos`).
 3. Guarda los ficheros en tu ordenador y, a ser posible, en un disco externo.
 
 Si en el futuro pasas al plan **Pro** de Supabase, tendrás copias diarias automáticas sin cambiar nada de la app.
@@ -220,5 +252,7 @@ Principios del diseño:
   `tecnicos` + titularidad de la fila. La web no tiene servidor propio ni clave de servicio.
 - **El estado solo cambia con `cambiar_estado()`**, que avanza o retrocede un paso y lo anota en el historial. Un
   `UPDATE` directo del estado, la firma o el registro se rechaza.
+- **Los PDF se leen en el navegador** (`src/lib/certificadoPdf.ts`, probado con CE3X v2.3). Lo leído es una
+  propuesta que el técnico revisa; lo que no se encuentra se deja vacío.
 - **Las validaciones no modifican datos**: devuelven error (no se admite) o aviso (se admite si el técnico lo
   confirma). La clave de cada aviso incluye el valor, así que si el valor cambia hay que volver a confirmarlo.

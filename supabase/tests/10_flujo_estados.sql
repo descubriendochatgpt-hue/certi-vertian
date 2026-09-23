@@ -92,17 +92,21 @@ end $$;
 
 -- ── firma y vencimiento ───────────────────────────────────────────────────
 select cambiar_estado((select id from expedientes where municipio = 'Oviedo'), 'datos_introducidos');
+insert into resultados (expediente_id, consumo_ep_nr, calificacion_consumo, emisiones_co2, calificacion_emisiones)
+select id, 150.2, 'E', 60.1, 'G' from expedientes where municipio = 'Oviedo';
 select cambiar_estado((select id from expedientes where municipio = 'Oviedo'), 'calculo_revisado');
+insert into checklist_revision (expediente_id, clave)
+select x.id, i.clave from expedientes x, checklist_items i where x.municipio = 'Oviedo';
 select pg_temp.falla($$select cambiar_estado((select id from expedientes where municipio = 'Oviedo'), 'certificado_firmado')$$, 'fecha de firma');
-select pg_temp.falla($$select cambiar_estado((select id from expedientes where municipio = 'Oviedo'), 'certificado_firmado', null, current_date - 10, 'E', 'E')$$, 'anterior a la de la visita');
-select cambiar_estado((select id from expedientes where municipio = 'Oviedo'), 'certificado_firmado', null, current_date, 'E', 'G');
+select pg_temp.falla($$select cambiar_estado((select id from expedientes where municipio = 'Oviedo'), 'certificado_firmado', null, current_date - 10)$$, 'anterior a la de la visita');
+select cambiar_estado((select id from expedientes where municipio = 'Oviedo'), 'certificado_firmado', null, current_date);
 
 do $$
 declare v date;
 begin
   select fecha_vencimiento into v from expedientes where municipio = 'Oviedo';
   if v <> (current_date + interval '5 years')::date then raise exception 'Con una G debía vencer a 5 años: %', v; end if;
-  raise notice 'FIRMA ✓ exige fecha y calificaciones; con G vence a 5 años';
+  raise notice 'FIRMA ✓ exige fecha; toma las calificaciones de los resultados; con G vence a 5 años';
 end $$;
 
 select pg_temp.falla($$select cambiar_estado((select id from expedientes where municipio = 'Oviedo'), 'registrado', null, current_date - 1)$$, 'anterior a la de firma');

@@ -201,3 +201,34 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
   .dos-columnas { grid-template-columns: 1fr 1fr; }
 }
 .rejilla-campos .campo:has(textarea) { grid-column: 1 / -1; }
+
+/* ───────── módulo 4: resultados, checklist, documentos ───────── */
+
+.tabla-desplazable { overflow-x: auto; }
+.tabla { width: 100%; border-collapse: collapse; font-size: 0.92rem; margin: 0.5rem 0; }
+.tabla th, .tabla td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--borde); vertical-align: top; }
+.tabla th { font-weight: 600; background: rgb(0 0 0 / 0.03); }
+.pequeno { font-size: 0.85rem; }
+.enlaces-secundarios { font-size: 0.95rem; }
+
+.checklist { list-style: none; padding: 0; margin: 1rem 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.checklist li { background: var(--blanco); border: 1px solid var(--borde); border-radius: var(--radio); padding: 0.7rem 0.9rem; }
+.checklist li.marcado { border-color: #9cc9b3; background: #f3faf6; }
+.checklist label { display: flex; gap: 0.6rem; align-items: flex-start; font-weight: 500; }
+.checklist input { margin-top: 0.15rem; }
+.apoyo { margin: 0.35rem 0 0 1.85rem; font-size: 0.9rem; padding: 0.3rem 0.5rem; border-radius: 6px; }
+.apoyo-coincide { background: var(--verde-claro); color: var(--verde); }
+.apoyo-revisar { background: var(--aviso-fondo); color: var(--aviso); }
+.apoyo-sin_datos { background: #f0f2f1; color: var(--suave); }
+.apoyo-info { background: var(--info-fondo); color: #24466f; }
+.checklist .pequeno { margin: 0.25rem 0 0 1.85rem; }
+
+.lista-documentos { list-style: none; padding: 0; margin: 0 0 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.lista-documentos li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.25rem 1rem;
+  background: var(--blanco); border: 1px solid var(--borde); border-radius: var(--radio); padding: 0.4rem 0.75rem; }
+.lista-documentos li strong { word-break: break-all; }
+.lista-documentos .acciones { margin: 0.25rem 0; }
+.subir-documento { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; }
+.subir-documento label { display: flex; flex-direction: column; gap: 0.25rem; font-weight: 500; flex: 1 1 220px; }
+.tabla td { overflow-wrap: anywhere; }
+@media (max-width: 639px) { .tabla { font-size: 0.85rem; } .tabla th, .tabla td { padding: 0.35rem 0.3rem; } }
