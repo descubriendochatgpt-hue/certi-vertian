@@ -69,10 +69,15 @@ export function DetalleExpediente() {
         )}
         {e.estado === 'datos_introducidos' && (
           <>
-            <p><strong>Siguiente paso:</strong> hacer el cálculo en el programa oficial y registrar aquí sus resultados (puedes importarlos del PDF del certificado).</p>
+            <p><strong>Siguiente paso:</strong> haz el cálculo en CE3X (la <em>Ficha para CE3X</em> te ayuda a teclear los datos) y después registra aquí sus resultados.</p>
+            <ol className="pasos-texto">
+              <li>Abre <strong>Resultados del cálculo</strong>.</li>
+              <li>Importa el PDF del certificado o teclea consumo, emisiones y sus letras, y pulsa <strong>Guardar</strong>.</li>
+              <li>Revisa los avisos, marca la declaración y pulsa <strong>Confirmar y pasar a «Cálculo revisado»</strong>.</li>
+            </ol>
             <div className="acciones">
+              <Link to={`/expedientes/${e.id}/resultados`} className="boton principal">Resultados del cálculo → paso 3</Link>
               <Link to={`/expedientes/${e.id}/ficha-ce3x`} className="boton">Ficha para CE3X</Link>
-              <Link to={`/expedientes/${e.id}/resultados`} className="boton principal">Resultados del cálculo</Link>
               <Link to={`/expedientes/${e.id}/toma-datos`} className="boton">Ver datos de la visita</Link>
             </div>
           </>
@@ -99,11 +104,11 @@ export function DetalleExpediente() {
             </div>
           </>
         )}
-        {e.estado !== 'visita_pendiente' && (
+        {e.estado !== 'visita_pendiente' && e.estado !== 'datos_introducidos' && (
           <p className="enlaces-secundarios">
             <Link to={`/expedientes/${e.id}/toma-datos`}>Datos de la visita</Link>
             {' · '}<Link to={`/expedientes/${e.id}/ficha-ce3x`}>Ficha para CE3X</Link>
-            {e.estado !== 'datos_introducidos' && <> · <Link to={`/expedientes/${e.id}/resultados`}>Resultados</Link></>}
+            {' · '}<Link to={`/expedientes/${e.id}/resultados`}>Resultados</Link>
           </p>
         )}
         {anterior && (

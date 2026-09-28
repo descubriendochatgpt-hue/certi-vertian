@@ -292,3 +292,4 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
   .ficha .datos { grid-template-columns: 1fr; gap: 0; }
   .ficha .datos dt { font-size: 0.85rem; margin-top: 0.4rem; }
 }
+.pasos-texto { margin: 0.25rem 0 0.5rem; padding-left: 1.3rem; }
