@@ -9,6 +9,8 @@ import {
 } from '../lib/tomaDatos';
 import { comprobarRango } from '../lib/validaciones';
 import { CampoNumero, CampoOpcion, CampoSiNo, CampoTexto, ConfirmarAvisos } from '../componentes/Campos';
+import { ImportarDatos } from '../componentes/ImportarDatos';
+import { aplicarPropuesta } from '../lib/importarDatos';
 import { type CopiaLocal, borrarCopiaLocal, guardarCopiaLocal, leerCopiaLocal } from '../lib/copiaLocal';
 
 type EstadoGuardado = 'guardado' | 'pendiente' | 'guardando' | 'sin_conexion' | 'error';
@@ -199,6 +201,8 @@ export function TomaDatos() {
       )}
 
       {error && <div className="caja error">{error}</div>}
+
+      {editable && <ImportarDatos datos={datos} onAplicar={(elementos) => cambiar(aplicarPropuesta(datos, elementos, nuevoId))} />}
 
       <details className="seccion" open>
         <summary>Datos generales</summary>

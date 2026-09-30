@@ -14,6 +14,7 @@ Herramienta web para organizar el trabajo de emisión de **certificados de efici
 |---|---|
 | 1. Gestión de expedientes (alta, estados, filtros, vencimientos) | ✅ Hecho |
 | 2. Toma de datos en campo (móvil, borrador, guardado automático) | ✅ Hecho |
+| 2b. Rellenar la toma de datos por voz, texto libre o archivo (Excel/CSV/JSON) | ✅ Hecho |
 | 3. Ficheros para CE3X · fase 1: ficha de introducción imprimible | ✅ Hecho |
 | 3. Ficheros para CE3X · fase 2: generar el `.cex` (experimental) | ⏳ A la espera de dos proyectos `.cex` de prueba con su `.xml` |
 | 4. Resultados (importación del PDF de CE3X), checklist previo a la firma y documentos | ✅ Hecho |
@@ -170,6 +171,30 @@ Visita pendiente → Datos introducidos → Cálculo revisado → Certificado fi
 - Si algo no cuadra (letra que no corresponde a la escala del propio certificado, referencia catastral o fecha de
   visita distintas, certificado anterior a la visita, sin recomendaciones…) aparece un aviso que debes confirmar.
 - Al pulsar **Confirmar y pasar a «Cálculo revisado»** los resultados quedan congelados.
+
+## Rellenar por voz, texto o archivo
+
+En la toma de datos, el apartado **Rellenar por voz, texto o archivo** ahorra teclear campo a campo:
+
+- **Dictado**: pulsa **🎙 Dictar** y di un elemento cada vez, haciendo una pausa (o diciendo «siguiente») entre
+  uno y otro. Por ejemplo:
+  - «Zona climática D1, superficie útil 85,5, altura libre 2,5, 2 plantas, NBE-CT-79»
+  - «Fachada norte 24 metros cuadrados U 1,35 estimada»
+  - «Dos ventanas en fachada norte de 1,20 por 1,50, doble vidrio, aluminio con rotura de puente térmico, con persiana»
+  - «Frente de forjado 12 metros»
+  - «Caldera de condensación de gas natural para calefacción y agua caliente, 24 kilovatios, rendimiento 98 %»
+- **Texto libre**: escribe o pega lo mismo, una línea por elemento, y pulsa **Interpretar**.
+- **Archivo**: un Excel (`.xlsx`) o CSV con una fila por elemento y una columna «Sección» (descarga la plantilla
+  desde el propio apartado), un `.txt` con frases como las de arriba, o un JSON de la toma de datos de la app.
+
+La app enseña **lo que ha entendido** (y lo que no), qué datos sustituye y qué queda por rellenar. Solo se añade lo
+que marcas, y después pasa por las mismas comprobaciones de siempre (valores raros en amarillo). Una U de ventana hay
+que decir si es «del vidrio» o «del marco»; si no, no se usa. Las medidas «1,20 por 1,50» se multiplican y se avisa.
+
+⚠️ El dictado usa el reconocimiento de voz del navegador: en Chrome y Edge **la voz se envía a Google o Microsoft**
+para pasarla a texto. Dicta solo datos técnicos (nada de nombres, DNI o teléfonos). Firefox no tiene dictado; en el
+móvil siempre puedes usar el micrófono del teclado dentro del cuadro de texto. Los archivos se leen en tu
+dispositivo y no se envían a ningún sitio.
 
 ## Ficha para CE3X
 
