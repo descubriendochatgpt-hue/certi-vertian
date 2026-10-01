@@ -16,7 +16,7 @@ Herramienta web para organizar el trabajo de emisión de **certificados de efici
 | 2. Toma de datos en campo (móvil, borrador, guardado automático) | ✅ Hecho |
 | 2b. Rellenar la toma de datos por voz, texto libre o archivo (Excel/CSV/JSON) | ✅ Hecho |
 | 3. Ficheros para CE3X · fase 1: ficha de introducción imprimible | ✅ Hecho |
-| 3. Ficheros para CE3X · fase 2: generar el `.cex` (experimental) | ⏳ A la espera de dos proyectos `.cex` de prueba con su `.xml` |
+| 3. Ficheros para CE3X · fase 2: generar el `.cex` (experimental) | 🧪 Datos administrativos y generales sobre una plantilla; envolvente e instalaciones, pendientes |
 | 4. Resultados (importación del PDF de CE3X), checklist previo a la firma y documentos | ✅ Hecho |
 | 5. Paquete de documentación para el registro de Asturias (sin envío) | ✅ Hecho |
 | 6. Panel (pendientes, visitas, vencimientos, estadísticas) y copia de seguridad completa | ✅ Hecho |
@@ -202,6 +202,26 @@ dispositivo y no se envían a ningún sitio.
   (datos administrativos, datos generales, envolvente por tipo de cerramiento, huecos, puentes térmicos,
   instalaciones, renovables). Puedes elegir coma o punto decimal y **imprimirla o guardarla en PDF**.
 - Es una ayuda para teclear: la app no abre ni controla CE3X.
+
+### Generar el proyecto `.cex` (experimental)
+
+En la misma ficha, **Generar el proyecto .cex** crea un fichero que se abre en CE3X con parte de los datos ya puestos:
+
+1. **Una vez:** en CE3X crea un proyecto nuevo, rellena **solo tus datos de técnico** y guárdalo (por ejemplo
+   `plantilla.cex`).
+2. En cada expediente, elige esa plantilla. La app te enseña qué campos va a rellenar (dirección, municipio,
+   referencia catastral, zona climática, superficie, altura, plantas, ACS, masa, ventilación, año…) y cuáles tendrás
+   que completar en CE3X. Pulsa **Descargar** y ábrelo en CE3X.
+3. Revisa todas las pantallas y **califica en CE3X**: el cálculo y la comprobación siguen siendo tuyos.
+
+Por ahora **no** escribe cerramientos, huecos, puentes térmicos ni instalaciones: CE3X guarda con ellos valores que
+calcula él mismo (U de la composición, factores de sombra…) y no se van a imitar. La app rechaza una plantilla que
+ya tenga elementos, para no arrastrar los de otro edificio. Solo se ha comprobado con **CE3X v3.1 Residencial**.
+
+Cómo es el formato (para desarrolladores): un `.cex` es una sucesión de *pickles* de Python 2 (protocolo 0) con
+saltos de línea CRLF. `src/lib/cex/pickle.ts` los lee y escribe sin ejecutar nada, conservando la diferencia entre
+`str` y `unicode`, enteros y reales; se ha comprobado que lee un proyecto real y lo vuelve a escribir con el mismo
+contenido. El último bloque es una huella del propio CE3X que la app no toca ni recalcula.
 
 ## Checklist previo a la firma
 
