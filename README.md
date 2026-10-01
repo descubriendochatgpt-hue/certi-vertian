@@ -14,8 +14,9 @@ Herramienta web para organizar el trabajo de emisión de **certificados de efici
 |---|---|
 | 1. Gestión de expedientes (alta, estados, filtros, vencimientos) | ✅ Hecho |
 | 2. Toma de datos en campo (móvil, borrador, guardado automático) | ✅ Hecho |
+| 2b. Rellenar la toma de datos por voz, texto libre o archivo (Excel/CSV/JSON) | ✅ Hecho |
 | 3. Ficheros para CE3X · fase 1: ficha de introducción imprimible | ✅ Hecho |
-| 3. Ficheros para CE3X · fase 2: generar el `.cex` (experimental) | ⏳ A la espera de dos proyectos `.cex` de prueba con su `.xml` |
+| 3. Ficheros para CE3X · fase 2: generar el `.cex` (experimental) | 🧪 Datos administrativos y generales sobre una plantilla; envolvente e instalaciones, pendientes |
 | 4. Resultados (importación del PDF de CE3X), checklist previo a la firma y documentos | ✅ Hecho |
 | 5. Paquete de documentación para el registro de Asturias (sin envío) | ✅ Hecho |
 | 6. Panel (pendientes, visitas, vencimientos, estadísticas) y copia de seguridad completa | ✅ Hecho |
@@ -171,12 +172,56 @@ Visita pendiente → Datos introducidos → Cálculo revisado → Certificado fi
   visita distintas, certificado anterior a la visita, sin recomendaciones…) aparece un aviso que debes confirmar.
 - Al pulsar **Confirmar y pasar a «Cálculo revisado»** los resultados quedan congelados.
 
+## Rellenar por voz, texto o archivo
+
+En la toma de datos, el apartado **Rellenar por voz, texto o archivo** ahorra teclear campo a campo:
+
+- **Dictado**: pulsa **🎙 Dictar** y di un elemento cada vez, haciendo una pausa (o diciendo «siguiente») entre
+  uno y otro. Por ejemplo:
+  - «Zona climática D1, superficie útil 85,5, altura libre 2,5, 2 plantas, NBE-CT-79»
+  - «Fachada norte 24 metros cuadrados U 1,35 estimada»
+  - «Dos ventanas en fachada norte de 1,20 por 1,50, doble vidrio, aluminio con rotura de puente térmico, con persiana»
+  - «Frente de forjado 12 metros»
+  - «Caldera de condensación de gas natural para calefacción y agua caliente, 24 kilovatios, rendimiento 98 %»
+- **Texto libre**: escribe o pega lo mismo, una línea por elemento, y pulsa **Interpretar**.
+- **Archivo**: un Excel (`.xlsx`) o CSV con una fila por elemento y una columna «Sección» (descarga la plantilla
+  desde el propio apartado), un `.txt` con frases como las de arriba, o un JSON de la toma de datos de la app.
+
+La app enseña **lo que ha entendido** (y lo que no), qué datos sustituye y qué queda por rellenar. Solo se añade lo
+que marcas, y después pasa por las mismas comprobaciones de siempre (valores raros en amarillo). Una U de ventana hay
+que decir si es «del vidrio» o «del marco»; si no, no se usa. Las medidas «1,20 por 1,50» se multiplican y se avisa.
+
+⚠️ El dictado usa el reconocimiento de voz del navegador: en Chrome y Edge **la voz se envía a Google o Microsoft**
+para pasarla a texto. Dicta solo datos técnicos (nada de nombres, DNI o teléfonos). Firefox no tiene dictado; en el
+móvil siempre puedes usar el micrófono del teclado dentro del cuadro de texto. Los archivos se leen en tu
+dispositivo y no se envían a ningún sitio.
+
 ## Ficha para CE3X
 
 - En la ficha del expediente, **Ficha para CE3X**: todos los datos de la visita ordenados como las pantallas de CE3X
   (datos administrativos, datos generales, envolvente por tipo de cerramiento, huecos, puentes térmicos,
   instalaciones, renovables). Puedes elegir coma o punto decimal y **imprimirla o guardarla en PDF**.
 - Es una ayuda para teclear: la app no abre ni controla CE3X.
+
+### Generar el proyecto `.cex` (experimental)
+
+En la misma ficha, **Generar el proyecto .cex** crea un fichero que se abre en CE3X con parte de los datos ya puestos:
+
+1. **Una vez:** en CE3X crea un proyecto nuevo, rellena **solo tus datos de técnico** y guárdalo (por ejemplo
+   `plantilla.cex`).
+2. En cada expediente, elige esa plantilla. La app te enseña qué campos va a rellenar (dirección, municipio,
+   referencia catastral, zona climática, superficie, altura, plantas, ACS, masa, ventilación, año…) y cuáles tendrás
+   que completar en CE3X. Pulsa **Descargar** y ábrelo en CE3X.
+3. Revisa todas las pantallas y **califica en CE3X**: el cálculo y la comprobación siguen siendo tuyos.
+
+Por ahora **no** escribe cerramientos, huecos, puentes térmicos ni instalaciones: CE3X guarda con ellos valores que
+calcula él mismo (U de la composición, factores de sombra…) y no se van a imitar. La app rechaza una plantilla que
+ya tenga elementos, para no arrastrar los de otro edificio. Solo se ha comprobado con **CE3X v3.1 Residencial**.
+
+Cómo es el formato (para desarrolladores): un `.cex` es una sucesión de *pickles* de Python 2 (protocolo 0) con
+saltos de línea CRLF. `src/lib/cex/pickle.ts` los lee y escribe sin ejecutar nada, conservando la diferencia entre
+`str` y `unicode`, enteros y reales; se ha comprobado que lee un proyecto real y lo vuelve a escribir con el mismo
+contenido. El último bloque es una huella del propio CE3X que la app no toca ni recalcula.
 
 ## Checklist previo a la firma
 

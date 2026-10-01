@@ -20,5 +20,5 @@
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "no-referrer"
-    Permissions-Policy = "camera=(self), geolocation=(), microphone=()"
+    Permissions-Policy = "camera=(self), geolocation=(), microphone=(self)"
     X-Robots-Tag = "noindex, nofollow"

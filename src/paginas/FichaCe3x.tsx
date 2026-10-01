@@ -3,14 +3,16 @@ import { Link, useParams } from 'react-router';
 import { obtenerExpediente, obtenerTomaDatos } from '../lib/api';
 import { type Expediente, NOMBRE_TIPO_EDIFICIO } from '../lib/estados';
 import { fecha, fechaHora } from '../lib/fechas';
+import { GenerarCex } from '../componentes/GenerarCex';
 import {
   CAMPOS_CERRAMIENTO, CAMPOS_GENERALES, CAMPOS_HUECO, CAMPOS_ILUMINACION, CAMPOS_INSTALACION, CAMPOS_PUENTE_TERMICO,
   CAMPOS_RENOVABLE, type DefCampo, type Fila, type TomaDatos, type Valor,
 } from '../lib/tomaDatos';
 
 // Módulo 3, fase 1: ficha para teclear a mano en CE3X los datos ya
-// verificados de la visita, en el orden de sus pantallas. No es un fichero
-// que se abra en el programa: la introducción y el cálculo los haces tú.
+// verificados de la visita, en el orden de sus pantallas.
+// Fase 2 (experimental): además, rellenar una plantilla .cex con lo que ya se
+// sabe colocar (ver lib/cex). El cálculo siempre lo hace el técnico en CE3X.
 
 type Separador = ',' | '.';
 const CLAVE_SEPARADOR = 'certi.separadorDecimal';
@@ -62,8 +64,9 @@ export function FichaCe3x() {
         <p><Link to={`/expedientes/${id}`}>← {exp.codigo}</Link></p>
         <div className="caja info">
           Ficha para <strong>introducir a mano</strong> en CE3X los datos de la visita, en el orden de sus pantallas.
-          No es un fichero para abrir en el programa: la introducción y el cálculo los haces tú.
+          Los datos administrativos y generales también se pueden pasar con un fichero <code>.cex</code> (abajo).
         </div>
+        <GenerarCex exp={exp} toma={d ?? null} />
         <div className="acciones">
           <label className="campo-casilla">Separador decimal:
             <select value={sep} onChange={(e) => { const s = e.target.value as Separador; setSep(s); try { localStorage.setItem(CLAVE_SEPARADOR, s); } catch { /* nada */ } }}>

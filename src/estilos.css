@@ -293,3 +293,14 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
   .ficha .datos dt { font-size: 0.85rem; margin-top: 0.4rem; }
 }
 .pasos-texto { margin: 0.25rem 0 0.5rem; padding-left: 1.3rem; }
+
+/* Rellenar por voz, texto o archivo */
+.importar textarea { font-size: 0.95rem; }
+.importar .importar-fichero { margin-top: 1rem; }
+.propuesta h3 { margin-top: 0; }
+.lista-propuesta { list-style: none; padding: 0; margin: 0; }
+.lista-propuesta > li { padding: 0.5rem 0; border-top: 1px solid var(--borde); }
+.lista-propuesta > li > label { display: flex; gap: 0.6rem; align-items: flex-start; }
+.lista-propuesta > li > label > input { margin-top: 0.3rem; }
+.lista-propuesta .valores { margin: 0.25rem 0; padding-left: 1.1rem; font-size: 0.95rem; }
+.etiqueta.experimental { background: var(--aviso-fondo); color: var(--aviso); font-weight: 600; margin-left: 0.4rem; }
