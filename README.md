@@ -20,18 +20,23 @@ Herramienta web para organizar el trabajo de emisión de **certificados de efici
 | 4. Resultados (importación del PDF de CE3X), checklist previo a la firma y documentos | ✅ Hecho |
 | 5. Paquete de documentación para el registro de Asturias (sin envío) | ✅ Hecho |
 | 6. Panel (pendientes, visitas, vencimientos, estadísticas) y copia de seguridad completa | ✅ Hecho |
-| 7. Conexión con el CRM de Vertian: bandeja de solicitudes (inmueble y propietario desde la web) | ✅ Hecho |
+| 7. Misma base de datos que el CRM de Vertian: expedientes desde sus pedidos y presupuestos de certificados | ✅ Hecho |
 
 ## Cómo funciona (en una frase)
 
-La app es una **página web** alojada gratis en **Netlify**; tus datos se guardan en una base de datos **Supabase**
-situada en la Unión Europea. Tu navegador habla directamente con Supabase: **los datos no pasan por Netlify**.
+La app es una **página web** alojada gratis en **Netlify**. Sus datos se guardan en el **mismo Supabase que el CRM de
+Vertian** (Unión Europea), en tablas propias. Así lee directamente los pedidos de certificado del CRM, sin copiar
+nada entre dos bases de datos. Tu navegador habla directamente con Supabase: **los datos no pasan por Netlify**.
 
 ```
  Móvil / ordenador  ──(pantallas)──▶  Netlify (gratis)
         │
-        └──────────(datos, cifrados)──▶  Supabase (UE, gratis)
+        └──────────(datos, cifrados)──▶  Supabase del CRM (UE)
+                                          ├─ tablas del CRM (clientes, pedidos, presupuestos…)
+                                          └─ tablas de CertiVertian (expedientes, toma de datos…)
 ```
+
+Los empleados del CRM no ven nada de CertiVertian, y CertiVertian solo **lee** del CRM los encargos de certificado.
 
 Para entrar hacen falta **email + contraseña + un código del móvil** (verificación en dos pasos). Además, solo las
 cuentas que tú autorices en la base de datos pueden ver algo.
@@ -40,24 +45,24 @@ cuentas que tú autorices en la base de datos pueden ver algo.
 
 # Instalación paso a paso
 
-Solo hay que hacerlo **una vez**. Calcula unos 30–45 minutos. No hace falta instalar nada en tu ordenador.
+Solo hay que hacerlo **una vez**. Calcula unos 20–30 minutos. No hace falta instalar nada en tu ordenador.
 
 Necesitas:
+- El **CRM de Vertian ya instalado** (su Supabase, con todas sus migraciones ejecutadas).
 - Una cuenta de **GitHub** (ya la tienes: es donde está este código).
 - Una app de autenticación en el móvil: **Google Authenticator** o **Microsoft Authenticator** (gratis).
 
-## Paso 1 · Crear el proyecto en Supabase
+> ¿Ya tenías CertiVertian con su propio Supabase? Lee antes «Pasar al Supabase del CRM», al final de esta sección.
 
-1. Entra en <https://supabase.com> y pulsa **Start your project**. Regístrate con tu cuenta de GitHub.
-2. Pulsa **New project** y rellena:
-   - **Name:** `certificados` (o el que quieras).
-   - **Database Password:** pulsa *Generate a password* y **guárdala** en un sitio seguro.
-   - **Region:** elige una de Europa, por ejemplo **West EU (Ireland)** o **Central EU (Frankfurt)**.
-     ⚠️ Esto es importante por protección de datos (RGPD) y no se puede cambiar después.
-   - **Plan:** Free.
-3. Pulsa **Create new project** y espera un par de minutos.
+## Paso 1 · Usar el Supabase del CRM
+
+No hay que crear otro proyecto. Entra en <https://supabase.com/dashboard> y abre el **proyecto del CRM**. Todo lo que
+sigue se hace en ese proyecto.
 
 ## Paso 2 · Crear las tablas
+
+Las migraciones del CRM tienen que estar ya ejecutadas: la última de estas (la 05) las necesita y, si faltan,
+avisa sin cambiar nada.
 
 1. En el menú de la izquierda de Supabase, abre **SQL Editor**.
 2. Pulsa **New query**.
@@ -69,22 +74,23 @@ Necesitas:
    (resultados, checklist y almacén de documentos).
 6. Y con [`supabase/migrations/20260925090000_04_registro.sql`](supabase/migrations/20260925090000_04_registro.sql)
    (tipos de documento para el registro).
-7. Y con [`supabase/migrations/20261007090000_05_solicitudes_crm.sql`](supabase/migrations/20261007090000_05_solicitudes_crm.sql)
-   (bandeja de solicitudes que llegan del CRM; ver «Conexión con el CRM»).
+7. Y con [`supabase/migrations/20261007090000_05_encargos_crm.sql`](supabase/migrations/20261007090000_05_encargos_crm.sql)
+   (lectura de los encargos de certificado del CRM; ver «Conexión con el CRM»).
 
 Ejecútalos **en ese orden** y **una sola vez** cada uno. Si ya tenías instalados algunos, ejecuta solo los que
 faltan.
 
 ## Paso 3 · Configurar el acceso
 
-En Supabase, menú **Authentication**:
+Las cuentas son **las mismas que las del CRM**: entras en CertiVertian con tu usuario del CRM. En Supabase, menú
+**Authentication**:
 
-1. **Sign In / Providers → Email**: déjalo activado.
-2. **Desactiva los registros públicos**: en *Authentication → Sign In / Providers* (o *Settings*) desactiva
-   **Allow new users to sign up**. Así nadie más puede crearse una cuenta.
-3. **Multi-Factor**: en *Authentication → Multi-Factor* comprueba que **TOTP (App Authenticator)** está activado.
-4. **Crea tu usuario**: *Authentication → Users → Add user → Create new user*. Pon tu email y una contraseña larga
-   (12 caracteres o más) y marca **Auto Confirm User**.
+1. **Registros públicos desactivados**: en *Authentication → Sign In / Providers* (o *Settings*), **Allow new users
+   to sign up** debe estar desactivado (el CRM ya lo pide así).
+2. **Multi-Factor**: en *Authentication → Multi-Factor* activa **TOTP (App Authenticator)**. CertiVertian exige la
+   verificación en dos pasos aunque el CRM no la pida.
+3. No hace falta crear usuario: usa tu cuenta del CRM. (Si algún día creas aquí un usuario solo para CertiVertian,
+   el CRM lo dará de alta como empleado: desactívalo en el CRM, en *Usuarios*.)
 
 ## Paso 4 · Autorizar tu cuenta
 
@@ -95,11 +101,13 @@ insert into public.tecnicos (user_id, nombre)
 select id, 'Tu nombre' from auth.users where email = 'tu-email@ejemplo.com';
 ```
 
-Debe decir *Success. 1 row*. Si dice *0 rows*, el email no coincide con el del paso 3.
+Debe decir *Success. 1 row*. Si dice *0 rows*, el email no coincide con el de tu cuenta del CRM.
+
+Solo las cuentas de esta tabla ven algo de CertiVertian. Los demás usuarios del CRM no ven nada.
 
 ## Paso 5 · Copiar las claves de conexión
 
-En Supabase, abre **Project Settings** (la rueda dentada) → **API** (o **Data API** / **API Keys**) y copia:
+En el Supabase del CRM, abre **Project Settings** (la rueda dentada) → **API** (o **Data API** / **API Keys**) y copia:
 
 - **Project URL**: algo como `https://abcdefghijk.supabase.co`
 - **Clave pública**: la llamada **anon public** o **publishable** (empieza por `eyJ…` o por `sb_publishable_…`).
@@ -118,6 +126,7 @@ En Supabase, abre **Project Settings** (la rueda dentada) → **API** (o **Data 
    |---|---|
    | `VITE_SUPABASE_URL` | la *Project URL* del paso 5 |
    | `VITE_SUPABASE_CLAVE_PUBLICA` | la clave pública del paso 5 |
+   | `VITE_CRM_URL` | (opcional) la dirección del CRM, p. ej. `https://crm.vertiansolutions.es`, para el botón «Abrir en el CRM» |
 
 4. Pulsa **Deploy**. En uno o dos minutos te dará una dirección tipo `https://nombre-aleatorio.netlify.app`.
    Puedes cambiar el nombre en *Site configuration → Change site name*.
@@ -133,6 +142,17 @@ En Supabase, abre **Project Settings** (la rueda dentada) → **API** (o **Data 
 
 **Consejo para el móvil:** en el navegador del móvil, menú → **Añadir a pantalla de inicio**. Tendrás un icono
 como si fuera una app.
+
+## Pasar al Supabase del CRM (si ya tenías CertiVertian instalado aparte)
+
+1. **Guarda una copia** de lo que tengas: en el Panel de CertiVertian, **Descargar copia completa**.
+2. Sigue los pasos 2 a 4 en el **Supabase del CRM**.
+3. En Netlify, cambia `VITE_SUPABASE_URL` y `VITE_SUPABASE_CLAVE_PUBLICA` por los del CRM (paso 6) y vuelve a
+   desplegar: *Deploys → Trigger deploy → Deploy site*.
+4. Entra en CertiVertian con tu cuenta del CRM y activa la verificación en dos pasos.
+5. Los expedientes del Supabase antiguo **no pasan solos**. Si solo eran pruebas, empieza de cero. Si alguno es real,
+   la copia del paso 1 lo conserva (con sus documentos) y se puede volver a dar de alta. El proyecto antiguo puedes
+   pausarlo o borrarlo cuando ya no lo necesites.
 
 ---
 
@@ -177,13 +197,22 @@ Visita pendiente → Datos introducidos → Cálculo revisado → Certificado fi
 
 ## Conexión con el CRM (solicitudes de la web)
 
-Cuando un cliente pide un certificado en la web de Vertian y rellena los datos del inmueble, el **CRM** los envía
-aquí. Aparecen en **Solicitudes** (menú de arriba, con el número de pendientes):
+CertiVertian usa la **misma base de datos que el CRM**, así que ve directamente sus **encargos de certificado**:
+
+- los **pedidos de certificado** que el cliente hace con su formulario del CRM:
+  - tipo de inmueble, superficie, dirección, código postal, población y referencia catastral;
+  - para qué lo quiere, plazo, contacto para la visita y mensaje;
+- los **presupuestos de certificados** en los que el cliente ha rellenado el inmueble en el trámite. Si el
+  presupuesto viene de un pedido, sale una sola vez, con los datos más completos;
+- y la **visita** que haya reservado.
+
+Aparecen en **Solicitudes** (menú de arriba, con el número de pendientes):
 
 1. Pulsa **Crear expediente**: se abre el formulario de siempre ya relleno (dirección, municipio, código postal,
-   referencia catastral, tipo de edificio, propietario, NIF, teléfono, email y fecha de la visita si la reservó).
-   Arriba te dice qué revisar.
-2. Revisa y pulsa **Guardar**. Hasta entonces no se crea nada; la solicitud queda «con expediente».
+   referencia catastral, tipo de edificio, propietario, NIF, teléfono, email y fecha de la visita). En las notas van
+   el resto de datos del encargo. Arriba te dice qué revisar.
+2. Revisa y pulsa **Guardar**. Hasta entonces no se crea nada. El expediente queda **enlazado** a su pedido o
+   presupuesto del CRM.
 3. Después, en la toma de datos, completa el resto por **voz, texto o archivo** y genera el `.cex` desde la
    **Ficha para CE3X**.
 
@@ -192,20 +221,16 @@ Algunos datos no se copian a propósito:
 - Un tipo dudoso, como «Edificio completo», se deja para que lo elijas tú.
 - Si el inmueble no está en Asturias, se avisa.
 
-Si el cliente cambia datos o reserva la visita después, la solicitud vuelve a la bandeja con **Revisar los
-cambios**. Ahí ves lo que hay en el expediente al lado de lo nuevo y pulsas **Usar** en lo que quieras cambiar.
+Si después el cliente cambia datos en el CRM o reserva la visita, al **Editar** el expediente verás lo que hay en el
+expediente al lado de lo que hay ahora en el CRM. Pulsa **Usar** en lo que quieras traer.
 
-**Puesta en marcha (una vez):** ejecuta la migración 05 (paso 2 de la instalación) y, en el SQL Editor:
+**Descartar** quita un encargo de tus pendientes (por ejemplo, si no sigue adelante). En el CRM no cambia nada.
 
-```sql
-select public.configurar_secreto_crm('UN-SECRETO-DE-32-CARACTERES-O-MAS');
-```
-
-Pon ese mismo secreto en el CRM, junto con la dirección y la clave **pública** de este Supabase. Los pasos están en
-el CRM, `docs/PEDIDOS_Y_WEB.md`, apartado «Conexión con CertiVertian».
-
-El CRM solo puede **dejar** solicitudes en la bandeja. No puede leer expedientes ni nada más. Aquí se guarda solo
-la huella del secreto, no el secreto.
+**Seguridad:**
+- CertiVertian solo **lee** del CRM y solo los encargos de certificado, con los campos necesarios. No puede
+  modificar nada del CRM.
+- Solo lo ven las cuentas autorizadas en `tecnicos`, con la verificación en dos pasos.
+- Si en el CRM se borran los datos de un cliente (derecho de supresión), el expediente se conserva sin el enlace.
 
 ## Rellenar por voz, texto o archivo
 

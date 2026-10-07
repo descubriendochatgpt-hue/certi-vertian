@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { supabase } from '../lib/supabase';
-import { contarSolicitudesPendientes } from '../lib/api';
+import { contarEncargosPendientes } from '../lib/api';
 import { borrarTodasLasCopiasLocales, hayCopiasLocales } from '../lib/copiaLocal';
 
 export function Marco() {
@@ -9,7 +9,7 @@ export function Marco() {
   const { pathname } = useLocation();
   const [pendientes, setPendientes] = useState(0);
   // Se recuenta al cambiar de pantalla (p. ej. al volver de crear un expediente).
-  useEffect(() => { contarSolicitudesPendientes().then(setPendientes).catch(() => setPendientes(0)); }, [pathname]);
+  useEffect(() => { contarEncargosPendientes().then(setPendientes).catch(() => setPendientes(0)); }, [pathname]);
 
   async function salir() {
     if (hayCopiasLocales() && !confirm('En este dispositivo hay cambios de la toma de datos que aún no se han subido al servidor. Si sales, se borrarán. ¿Salir igualmente?')) return;

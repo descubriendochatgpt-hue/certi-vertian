@@ -6,7 +6,7 @@ import { supabase } from './supabase';
 import type { AnotacionHistorial, Calificacion, Estado, Expediente } from './estados';
 import { type TomaDatos, VERSION_ESQUEMA, normalizarTomaDatos } from './tomaDatos';
 import { type Resultados, resultadosVacios } from './resultados';
-import type { EstadoSolicitud, SolicitudCrm } from './solicitudesCrm';
+import type { EncargoCrm } from './encargosCrm';
 
 export class ErrorDatos extends Error {}
 
@@ -74,7 +74,7 @@ export type DatosExpediente = Pick<
   | 'direccion' | 'municipio' | 'codigo_postal' | 'referencia_catastral' | 'tipo_edificio'
   | 'superficie_util' | 'anio_construccion' | 'propietario_nombre' | 'propietario_nif'
   | 'propietario_telefono' | 'propietario_email' | 'fecha_visita' | 'notas' | 'avisos_confirmados'
->;
+> & Partial<Pick<Expediente, 'crm_pedido_id' | 'crm_presupuesto_id'>>;
 
 export async function crearExpediente(d: DatosExpediente): Promise<Expediente> {
   return comprobar(await supabase.from('expedientes').insert(d).select().single()) as Expediente;
@@ -279,28 +279,22 @@ export async function borrarAdjunto(a: Adjunto): Promise<void> {
   await supabase.storage.from(CUBO).remove([a.ruta]);
 }
 
-// ─────────────────────────── Solicitudes del CRM ──────────────────────────
+// ─────────────────────────── Encargos del CRM ─────────────────────────────
+// Misma base de datos que el CRM: se leen con encargos_certificado() (solo
+// lectura). Si aún no se ha ejecutado la migración 05, la pantalla lo dice.
 
-export async function listarSolicitudes(estado: EstadoSolicitud | 'todas' = 'pendiente'): Promise<SolicitudCrm[]> {
-  let q = supabase.from('solicitudes_crm').select('*').order('actualizada_en', { ascending: false }).limit(200);
-  if (estado !== 'todas') q = q.eq('estado', estado);
-  return comprobar(await q) as SolicitudCrm[];
+export async function listarEncargos(): Promise<EncargoCrm[]> {
+  return comprobar(await supabase.rpc('encargos_certificado')) as EncargoCrm[];
 }
 
-export async function contarSolicitudesPendientes(): Promise<number> {
-  const r = await supabase.from('solicitudes_crm').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente');
-  // Si aún no se ha ejecutado la migración 05, la bandeja simplemente no aparece.
-  return r.error ? 0 : r.count ?? 0;
+/** Encargos sin expediente y sin descartar (para el número del menú). */
+export async function contarEncargosPendientes(): Promise<number> {
+  const r = await supabase.rpc('encargos_certificado');
+  if (r.error || !Array.isArray(r.data)) return 0;
+  return (r.data as EncargoCrm[]).filter((e) => !e.expediente_id && !e.descartado).length;
 }
 
-export async function obtenerSolicitud(id: string): Promise<SolicitudCrm | null> {
-  return comprobar(await supabase.from('solicitudes_crm').select('*').eq('id', id).maybeSingle()) as SolicitudCrm | null;
-}
-
-/** Cambia el estado de una solicitud; el expediente enlazado solo cambia si se indica. */
-export async function resolverSolicitud(id: string, estado: EstadoSolicitud, expedienteId?: string): Promise<void> {
-  comprobar(await supabase.from('solicitudes_crm').update({
-    estado, resuelta_en: estado === 'pendiente' ? null : new Date().toISOString(),
-    ...(expedienteId ? { expediente_id: expedienteId } : {}),
-  }).eq('id', id));
+export async function descartarEncargo(e: Pick<EncargoCrm, 'origen' | 'crm_id'>, descartar: boolean): Promise<void> {
+  if (descartar) comprobar(await supabase.from('encargos_descartados').insert({ origen: e.origen, crm_id: e.crm_id }));
+  else comprobar(await supabase.from('encargos_descartados').delete().eq('origen', e.origen).eq('crm_id', e.crm_id));
 }

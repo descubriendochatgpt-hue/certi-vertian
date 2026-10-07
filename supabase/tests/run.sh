@@ -8,7 +8,7 @@ H="${PGHOST:-/tmp}"; P="${PGPORT:-5433}"; U="${PGUSER:-postgres}"; DB="${PGDATAB
 q() { psql -h "$H" -p "$P" -U "$U" -v ON_ERROR_STOP=1 -q -d "$DB" "$@"; }
 preparar() {
   psql -h "$H" -p "$P" -U "$U" -q -d postgres -c "drop database if exists $DB" -c "create database $DB" 2>&1 | grep -v NOTICE || true
-  q -f tests/00_auth_simulado.sql
+  for s in tests/00_*.sql; do q -f "$s"; done
   for m in migrations/*.sql; do q -f "$m"; done
 }
 FALLOS=0

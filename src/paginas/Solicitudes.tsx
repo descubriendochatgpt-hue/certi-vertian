@@ -1,91 +1,90 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { listarSolicitudes, resolverSolicitud } from '../lib/api';
+import { descartarEncargo, listarEncargos } from '../lib/api';
 import { fechaHora } from '../lib/fechas';
-import { type EstadoSolicitud, type SolicitudCrm, leerDatosCrm, propuestaDesdeCrm, resumenSolicitud } from '../lib/solicitudesCrm';
+import { type EncargoCrm, claveEncargo, enlaceCrm, leerEncargo, resumenEncargo } from '../lib/encargosCrm';
+
+type Filtro = 'pendientes' | 'con_expediente' | 'descartados' | 'todos';
 
 /**
- * Bandeja de solicitudes que llegan del CRM. Ninguna se convierte sola en
- * expediente: «Crear expediente» abre el formulario ya relleno para revisarlo.
+ * Encargos de certificado del CRM (misma base de datos). Ninguno se convierte
+ * solo en expediente: «Crear expediente» abre el formulario ya relleno.
  */
 export function Solicitudes() {
-  const [filtro, setFiltro] = useState<EstadoSolicitud | 'todas'>('pendiente');
-  const [lista, setLista] = useState<SolicitudCrm[] | null>(null);
+  const [filtro, setFiltro] = useState<Filtro>('pendientes');
+  const [lista, setLista] = useState<EncargoCrm[] | null>(null);
   const [error, setError] = useState('');
 
   const cargar = () => {
     setError('');
-    listarSolicitudes(filtro).then(setLista).catch((e: Error) => {
+    listarEncargos().then(setLista).catch((e: Error) => {
       setLista([]);
-      setError(/solicitudes_crm/.test(e.message)
-        ? 'Falta preparar la base de datos: ejecuta la migración 05 (ver README, «Conexión con el CRM»).'
+      setError(/encargos_certificado|function|schema cache/i.test(e.message)
+        ? 'Falta preparar la base de datos: ejecuta la migración 05 en el Supabase del CRM (ver README, «Conexión con el CRM»).'
         : e.message);
     });
   };
-  useEffect(cargar, [filtro]);
+  useEffect(cargar, []);
 
-  async function cambiar(s: SolicitudCrm, estado: EstadoSolicitud) {
-    try { await resolverSolicitud(s.id, estado); cargar(); } catch (e) { setError((e as Error).message); }
+  async function descartar(e: EncargoCrm, si: boolean) {
+    try { await descartarEncargo(e, si); cargar(); } catch (err) { setError((err as Error).message); }
   }
+
+  const visibles = (lista ?? []).filter((e) =>
+    filtro === 'todos' ? true
+    : filtro === 'descartados' ? e.descartado
+    : filtro === 'con_expediente' ? Boolean(e.expediente_id)
+    : !e.expediente_id && !e.descartado);
 
   return (
     <main className="pagina">
       <h1>Solicitudes del CRM</h1>
       <p className="subtitulo">
-        Encargos de certificado que los clientes han rellenado en la web. Al crear el expediente revisas los datos
-        antes de guardarlos.
+        Encargos de certificado del CRM con los datos que ha rellenado el cliente. Al crear el expediente revisas los
+        datos antes de guardarlos.
       </p>
       <div className="acciones">
         <label className="campo-casilla">Mostrar:
-          <select value={filtro} onChange={(e) => setFiltro(e.target.value as EstadoSolicitud | 'todas')}>
-            <option value="pendiente">Pendientes</option>
-            <option value="importada">Con expediente</option>
-            <option value="descartada">Descartadas</option>
-            <option value="todas">Todas</option>
+          <select value={filtro} onChange={(e) => setFiltro(e.target.value as Filtro)}>
+            <option value="pendientes">Pendientes</option>
+            <option value="con_expediente">Con expediente</option>
+            <option value="descartados">Descartadas</option>
+            <option value="todos">Todas</option>
           </select>
         </label>
       </div>
       {error && <div className="caja error">{error}</div>}
       {lista === null && <p className="cargando">Cargando…</p>}
-      {lista?.length === 0 && !error && <p className="vacio">No hay solicitudes {filtro === 'pendiente' ? 'pendientes' : 'aquí'}.</p>}
+      {lista !== null && visibles.length === 0 && !error && <p className="vacio">No hay solicitudes {filtro === 'pendientes' ? 'pendientes' : 'aquí'}.</p>}
       <ul className="tarjetas">
-        {lista?.map((s) => {
-          const d = leerDatosCrm(s.datos);
-          const p = propuestaDesdeCrm(d);
+        {visibles.map((e) => {
+          const d = leerEncargo(e);
+          const crm = enlaceCrm(e);
           return (
-            <li key={s.id} className="tarjeta">
+            <li key={claveEncargo(e)} className="tarjeta">
               <div className="tarjeta-cabecera">
-                <strong>{resumenSolicitud(d)}</strong>
-                <span className="suave">{d.referencia_crm || s.referencia}</span>
+                <strong>{resumenEncargo(d)}</strong>
+                <span className="suave">{d.referencia}</span>
               </div>
               <div className="tarjeta-pie suave">
                 {d.servicio && <span>{d.servicio}</span>}
-                <span>Recibida {fechaHora(s.recibida_en)}</span>
-                {s.actualizada_en !== s.recibida_en && <span>Actualizada {fechaHora(s.actualizada_en)}</span>}
+                <span>Recibido {fechaHora(e.recibido_en)}</span>
                 {d.visita && <span>Visita {fechaHora(d.visita)}</span>}
-                {p.referencia_catastral && <span>RC {p.referencia_catastral}</span>}
+                {d.inmueble.ref_catastral && <span>RC {d.inmueble.ref_catastral}</span>}
+                {e.estado_crm && <span>En el CRM: {e.estado_crm}</span>}
               </div>
-              {s.estado === 'pendiente' && s.expediente_id && (
-                <p className="nota-aviso">El cliente ha cambiado datos después de crear el expediente: revísalos.</p>
-              )}
               <div className="acciones">
-                {s.estado === 'pendiente' && !s.expediente_id && (
-                  <Link className="boton principal" to={`/expedientes/nuevo?solicitud=${s.id}`}>Crear expediente</Link>
+                {!e.expediente_id && !e.descartado && (
+                  <Link className="boton principal" to={`/expedientes/nuevo?encargo=${claveEncargo(e)}`}>Crear expediente</Link>
                 )}
-                {s.expediente_id && <Link className="boton" to={`/expedientes/${s.expediente_id}`}>Ver expediente</Link>}
-                {s.estado === 'pendiente' && s.expediente_id && (
-                  <>
-                    <Link className="boton principal" to={`/expedientes/${s.expediente_id}/editar?solicitud=${s.id}`}>Revisar los cambios</Link>
-                    <button type="button" onClick={() => cambiar(s, 'importada')}>Sin cambios que aplicar</button>
-                  </>
-                )}
-                {s.estado === 'pendiente' && !s.expediente_id && (
-                  <button type="button" onClick={() => { if (confirm('¿Descartar esta solicitud? Podrás recuperarla desde «Descartadas».')) cambiar(s, 'descartada'); }}>
+                {e.expediente_id && <Link className="boton" to={`/expedientes/${e.expediente_id}`}>Ver expediente</Link>}
+                {!e.expediente_id && !e.descartado && (
+                  <button type="button" onClick={() => { if (confirm('¿Quitar esta solicitud de pendientes? En el CRM no cambia nada; podrás recuperarla desde «Descartadas».')) descartar(e, true); }}>
                     Descartar
                   </button>
                 )}
-                {s.estado === 'descartada' && <button type="button" onClick={() => cambiar(s, 'pendiente')}>Recuperar</button>}
-                {d.enlace_crm && <a className="boton" href={d.enlace_crm} target="_blank" rel="noopener noreferrer">Abrir en el CRM</a>}
+                {e.descartado && <button type="button" onClick={() => descartar(e, false)}>Recuperar</button>}
+                {crm && <a className="boton" href={crm} target="_blank" rel="noopener noreferrer">Abrir en el CRM</a>}
               </div>
             </li>
           );

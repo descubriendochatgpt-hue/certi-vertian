@@ -91,6 +91,9 @@ export interface Expediente {
   fecha_vencimiento: string | null;
   avisos_confirmados: string[];
   notas: string | null;
+  /** Pedido y presupuesto del CRM de los que sale (misma base de datos). */
+  crm_pedido_id: string | null;
+  crm_presupuesto_id: string | null;
   creado_en: string;
   actualizado_en: string;
 }
