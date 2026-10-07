@@ -6,6 +6,7 @@ import { supabase } from './supabase';
 import type { AnotacionHistorial, Calificacion, Estado, Expediente } from './estados';
 import { type TomaDatos, VERSION_ESQUEMA, normalizarTomaDatos } from './tomaDatos';
 import { type Resultados, resultadosVacios } from './resultados';
+import type { EncargoCrm } from './encargosCrm';
 
 export class ErrorDatos extends Error {}
 
@@ -73,7 +74,7 @@ export type DatosExpediente = Pick<
   | 'direccion' | 'municipio' | 'codigo_postal' | 'referencia_catastral' | 'tipo_edificio'
   | 'superficie_util' | 'anio_construccion' | 'propietario_nombre' | 'propietario_nif'
   | 'propietario_telefono' | 'propietario_email' | 'fecha_visita' | 'notas' | 'avisos_confirmados'
->;
+> & Partial<Pick<Expediente, 'crm_pedido_id' | 'crm_presupuesto_id'>>;
 
 export async function crearExpediente(d: DatosExpediente): Promise<Expediente> {
   return comprobar(await supabase.from('expedientes').insert(d).select().single()) as Expediente;
@@ -276,4 +277,24 @@ export async function borrarAdjunto(a: Adjunto): Promise<void> {
   const filas = comprobar(await supabase.from('adjuntos').delete().eq('id', a.id).select('id')) as { id: string }[];
   if (filas.length === 0) throw new ErrorDatos('Este documento ya no se puede borrar (el expediente está registrado).');
   await supabase.storage.from(CUBO).remove([a.ruta]);
+}
+
+// ─────────────────────────── Encargos del CRM ─────────────────────────────
+// Misma base de datos que el CRM: se leen con encargos_certificado() (solo
+// lectura). Si aún no se ha ejecutado la migración 05, la pantalla lo dice.
+
+export async function listarEncargos(): Promise<EncargoCrm[]> {
+  return comprobar(await supabase.rpc('encargos_certificado')) as EncargoCrm[];
+}
+
+/** Encargos sin expediente y sin descartar (para el número del menú). */
+export async function contarEncargosPendientes(): Promise<number> {
+  const r = await supabase.rpc('encargos_certificado');
+  if (r.error || !Array.isArray(r.data)) return 0;
+  return (r.data as EncargoCrm[]).filter((e) => !e.expediente_id && !e.descartado).length;
+}
+
+export async function descartarEncargo(e: Pick<EncargoCrm, 'origen' | 'crm_id'>, descartar: boolean): Promise<void> {
+  if (descartar) comprobar(await supabase.from('encargos_descartados').insert({ origen: e.origen, crm_id: e.crm_id }));
+  else comprobar(await supabase.from('encargos_descartados').delete().eq('origen', e.origen).eq('crm_id', e.crm_id));
 }

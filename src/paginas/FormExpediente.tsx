@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
-import { type DatosExpediente, actualizarExpediente, crearExpediente, obtenerExpediente } from '../lib/api';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { type DatosExpediente, actualizarExpediente, crearExpediente, listarEncargos, obtenerExpediente } from '../lib/api';
+import { type EncargoCrm, type PropuestaExpediente, claveEncargo, leerEncargo, propuestaDesdeCrm } from '../lib/encargosCrm';
 import { NOMBRE_TIPO_EDIFICIO, type TipoEdificio, esResidencial } from '../lib/estados';
 import {
   type Aviso, type Comprobacion, CONCEJOS_ASTURIAS, comprobarCodigoPostal, comprobarConcejo, comprobarEmail,
@@ -66,15 +67,48 @@ function avisosDe(f: Formulario, c: Comprobaciones): Aviso[] {
 
 const vacioANull = (s: string) => (s.trim() ? s.trim() : null);
 
+/** Campos que puede traer un encargo del CRM, con su nombre para mostrar. */
+const CAMPOS_CRM: [keyof Formulario & keyof PropuestaExpediente, string][] = [
+  ['direccion', 'Dirección'], ['municipio', 'Municipio'], ['codigo_postal', 'Código postal'],
+  ['referencia_catastral', 'Referencia catastral'], ['tipo_edificio', 'Tipo de edificio'],
+  ['propietario_nombre', 'Propietario'], ['propietario_nif', 'NIF'], ['propietario_telefono', 'Teléfono'],
+  ['propietario_email', 'Email'], ['fecha_visita', 'Fecha de la visita'],
+];
+
 export function FormExpediente() {
   const { id } = useParams();
+  const [params] = useSearchParams();
+  const claveCrm = params.get('encargo');
   const navegar = useNavigate();
+  const [encargo, setEncargo] = useState<EncargoCrm | null>(null);
+  const [propuesta, setPropuesta] = useState<PropuestaExpediente | null>(null);
   const [f, setF] = useState<Formulario>(VACIO);
   const [confirmados, setConfirmados] = useState<Set<string>>(new Set());
-  const [cargando, setCargando] = useState(Boolean(id));
+  const [cargando, setCargando] = useState(Boolean(id || claveCrm));
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
   const [mostrarAvisos, setMostrarAvisos] = useState(false);
+
+  // Encargo del CRM (misma base de datos): en un expediente nuevo rellena el
+  // formulario; en uno ya enlazado solo se muestran las diferencias con lo
+  // que hay ahora en el CRM, para aplicarlas una a una.
+  useEffect(() => {
+    if (!claveCrm && !id) return;
+    listarEncargos().then((todos) => {
+      const e = claveCrm ? todos.find((x) => claveEncargo(x) === claveCrm) : todos.find((x) => x.expediente_id === id);
+      if (!e) { if (claveCrm) setError('No se encuentra ese encargo en el CRM.'); return; }
+      const p = propuestaDesdeCrm(leerEncargo(e));
+      setEncargo(e);
+      setPropuesta(p);
+      if (!id) {
+        const { revisar: _r, ...campos } = p;
+        setF({ ...VACIO, ...campos });
+      }
+    })
+      // Sin la migración 05 (o sin CRM) el formulario funciona igual, sin datos del CRM.
+      .catch((e: Error) => { if (claveCrm) setError(e.message); })
+      .finally(() => { if (!id) setCargando(false); });
+  }, [id, claveCrm]);
 
   useEffect(() => {
     if (!id) return;
@@ -125,6 +159,8 @@ export function FormExpediente() {
       notas: vacioANull(f.notas),
       // Solo se guardan las confirmaciones de avisos que siguen vigentes.
       avisos_confirmados: avisos.map((a) => a.clave),
+      // Al crearlo desde un encargo, queda enlazado a su pedido y presupuesto del CRM.
+      ...(!id && encargo ? { crm_pedido_id: encargo.pedido_id, crm_presupuesto_id: encargo.presupuesto_id } : {}),
     };
     setEnviando(true);
     try {
@@ -143,6 +179,17 @@ export function FormExpediente() {
     <main className="pagina">
       <p><Link to={id ? `/expedientes/${id}` : '/expedientes'}>← Volver</Link></p>
       <h1>{id ? 'Editar expediente' : 'Nuevo expediente'}</h1>
+
+      {propuesta && !id && (
+        <div className="caja info">
+          <strong>Datos del encargo del CRM.</strong> Revísalos antes de guardar: el expediente no se crea hasta que
+          pulses «Guardar».
+          {propuesta.revisar.length > 0 && <ul className="lista-simple">{propuesta.revisar.map((r) => <li key={r}>{r}</li>)}</ul>}
+        </div>
+      )}
+      {propuesta && id && !cargando && CAMPOS_CRM.some(([k]) => propuesta[k] && propuesta[k] !== f[k]) && (
+        <CambiosCrm propuesta={propuesta} actual={f} onUsar={(k, v) => setF((x) => ({ ...x, [k]: v }))} />
+      )}
 
       <form onSubmit={guardar} className="formulario" noValidate>
         <fieldset>
@@ -191,5 +238,37 @@ export function FormExpediente() {
         </div>
       </form>
     </main>
+  );
+}
+
+/** Diferencias entre el expediente y lo que ha vuelto a mandar el CRM. Nada se cambia sin pulsar «Usar». */
+function CambiosCrm({ propuesta, actual, onUsar }: {
+  propuesta: PropuestaExpediente;
+  actual: Formulario;
+  onUsar: (k: keyof Formulario, v: string) => void;
+}) {
+  const cambios = CAMPOS_CRM.filter(([k]) => propuesta[k] && propuesta[k] !== actual[k]);
+  return (
+    <div className="caja aviso">
+      <strong>En el CRM hay datos distintos de los del expediente</strong> (el cliente puede haberlos cambiado o
+      haber reservado la visita). Pulsa «Usar» en los que quieras traer y después «Guardar».
+      {cambios.length > 0 && (
+        <div className="tabla-desplazable">
+          <table className="tabla">
+            <thead><tr><th>Dato</th><th>En el expediente</th><th>En el CRM</th><th /></tr></thead>
+            <tbody>
+              {cambios.map(([k, nombre]) => (
+                <tr key={k}>
+                  <td>{nombre}</td>
+                  <td>{String(actual[k] || '—')}</td>
+                  <td>{propuesta[k]}</td>
+                  <td><button type="button" onClick={() => onUsar(k, propuesta[k])}>Usar</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }

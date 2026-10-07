@@ -1,0 +1,9 @@
+# Cabeceras de seguridad para todas las páginas (Cloudflare las aplica al servir dist/).
+# Los datos van del navegador a Supabase: por eso connect-src solo permite *.supabase.co.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(self), geolocation=(), microphone=(self)
+  X-Robots-Tag: noindex, nofollow

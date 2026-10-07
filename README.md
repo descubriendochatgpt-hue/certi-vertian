@@ -20,17 +20,23 @@ Herramienta web para organizar el trabajo de emisión de **certificados de efici
 | 4. Resultados (importación del PDF de CE3X), checklist previo a la firma y documentos | ✅ Hecho |
 | 5. Paquete de documentación para el registro de Asturias (sin envío) | ✅ Hecho |
 | 6. Panel (pendientes, visitas, vencimientos, estadísticas) y copia de seguridad completa | ✅ Hecho |
+| 7. Misma base de datos que el CRM de Vertian: expedientes desde sus pedidos y presupuestos de certificados | ✅ Hecho |
 
 ## Cómo funciona (en una frase)
 
-La app es una **página web** alojada gratis en **Netlify**; tus datos se guardan en una base de datos **Supabase**
-situada en la Unión Europea. Tu navegador habla directamente con Supabase: **los datos no pasan por Netlify**.
+La app es una **página web** publicada en **Cloudflare**, en la misma cuenta que el CRM. Sus datos se guardan en el **mismo Supabase que el CRM de
+Vertian** (Unión Europea), en tablas propias. Así lee directamente los pedidos de certificado del CRM, sin copiar
+nada entre dos bases de datos. Tu navegador habla directamente con Supabase: **los datos no pasan por Cloudflare**.
 
 ```
- Móvil / ordenador  ──(pantallas)──▶  Netlify (gratis)
+ Móvil / ordenador  ──(pantallas)──▶  Cloudflare (Worker certi-vertian)
         │
-        └──────────(datos, cifrados)──▶  Supabase (UE, gratis)
+        └──────────(datos, cifrados)──▶  Supabase del CRM (UE)
+                                          ├─ tablas del CRM (clientes, pedidos, presupuestos…)
+                                          └─ tablas de CertiVertian (expedientes, toma de datos…)
 ```
+
+Los empleados del CRM no ven nada de CertiVertian, y CertiVertian solo **lee** del CRM los encargos de certificado.
 
 Para entrar hacen falta **email + contraseña + un código del móvil** (verificación en dos pasos). Además, solo las
 cuentas que tú autorices en la base de datos pueden ver algo.
@@ -39,24 +45,24 @@ cuentas que tú autorices en la base de datos pueden ver algo.
 
 # Instalación paso a paso
 
-Solo hay que hacerlo **una vez**. Calcula unos 30–45 minutos. No hace falta instalar nada en tu ordenador.
+Solo hay que hacerlo **una vez**. Calcula unos 20–30 minutos. No hace falta instalar nada en tu ordenador.
 
 Necesitas:
+- El **CRM de Vertian ya instalado** (su Supabase, con todas sus migraciones ejecutadas).
 - Una cuenta de **GitHub** (ya la tienes: es donde está este código).
 - Una app de autenticación en el móvil: **Google Authenticator** o **Microsoft Authenticator** (gratis).
 
-## Paso 1 · Crear el proyecto en Supabase
+> ¿Ya tenías CertiVertian con su propio Supabase? Lee antes «Pasar al Supabase del CRM», al final de esta sección.
 
-1. Entra en <https://supabase.com> y pulsa **Start your project**. Regístrate con tu cuenta de GitHub.
-2. Pulsa **New project** y rellena:
-   - **Name:** `certificados` (o el que quieras).
-   - **Database Password:** pulsa *Generate a password* y **guárdala** en un sitio seguro.
-   - **Region:** elige una de Europa, por ejemplo **West EU (Ireland)** o **Central EU (Frankfurt)**.
-     ⚠️ Esto es importante por protección de datos (RGPD) y no se puede cambiar después.
-   - **Plan:** Free.
-3. Pulsa **Create new project** y espera un par de minutos.
+## Paso 1 · Usar el Supabase del CRM
+
+No hay que crear otro proyecto. Entra en <https://supabase.com/dashboard> y abre el **proyecto del CRM**. Todo lo que
+sigue se hace en ese proyecto.
 
 ## Paso 2 · Crear las tablas
+
+Las migraciones del CRM tienen que estar ya ejecutadas: la última de estas (la 05) las necesita y, si faltan,
+avisa sin cambiar nada.
 
 1. En el menú de la izquierda de Supabase, abre **SQL Editor**.
 2. Pulsa **New query**.
@@ -68,20 +74,23 @@ Necesitas:
    (resultados, checklist y almacén de documentos).
 6. Y con [`supabase/migrations/20260925090000_04_registro.sql`](supabase/migrations/20260925090000_04_registro.sql)
    (tipos de documento para el registro).
+7. Y con [`supabase/migrations/20261007090000_05_encargos_crm.sql`](supabase/migrations/20261007090000_05_encargos_crm.sql)
+   (lectura de los encargos de certificado del CRM; ver «Conexión con el CRM»).
 
 Ejecútalos **en ese orden** y **una sola vez** cada uno. Si ya tenías instalados algunos, ejecuta solo los que
 faltan.
 
 ## Paso 3 · Configurar el acceso
 
-En Supabase, menú **Authentication**:
+Las cuentas son **las mismas que las del CRM**: entras en CertiVertian con tu usuario del CRM. En Supabase, menú
+**Authentication**:
 
-1. **Sign In / Providers → Email**: déjalo activado.
-2. **Desactiva los registros públicos**: en *Authentication → Sign In / Providers* (o *Settings*) desactiva
-   **Allow new users to sign up**. Así nadie más puede crearse una cuenta.
-3. **Multi-Factor**: en *Authentication → Multi-Factor* comprueba que **TOTP (App Authenticator)** está activado.
-4. **Crea tu usuario**: *Authentication → Users → Add user → Create new user*. Pon tu email y una contraseña larga
-   (12 caracteres o más) y marca **Auto Confirm User**.
+1. **Registros públicos desactivados**: en *Authentication → Sign In / Providers* (o *Settings*), **Allow new users
+   to sign up** debe estar desactivado (el CRM ya lo pide así).
+2. **Multi-Factor**: en *Authentication → Multi-Factor* activa **TOTP (App Authenticator)**. CertiVertian exige la
+   verificación en dos pasos aunque el CRM no la pida.
+3. No hace falta crear usuario: usa tu cuenta del CRM. (Si algún día creas aquí un usuario solo para CertiVertian,
+   el CRM lo dará de alta como empleado: desactívalo en el CRM, en *Usuarios*.)
 
 ## Paso 4 · Autorizar tu cuenta
 
@@ -92,37 +101,61 @@ insert into public.tecnicos (user_id, nombre)
 select id, 'Tu nombre' from auth.users where email = 'tu-email@ejemplo.com';
 ```
 
-Debe decir *Success. 1 row*. Si dice *0 rows*, el email no coincide con el del paso 3.
+Debe decir *Success. 1 row*. Si dice *0 rows*, el email no coincide con el de tu cuenta del CRM.
+
+Solo las cuentas de esta tabla ven algo de CertiVertian. Los demás usuarios del CRM no ven nada.
 
 ## Paso 5 · Copiar las claves de conexión
 
-En Supabase, abre **Project Settings** (la rueda dentada) → **API** (o **Data API** / **API Keys**) y copia:
+En el Supabase del CRM, abre **Project Settings** (la rueda dentada) → **API** (o **Data API** / **API Keys**) y copia:
 
 - **Project URL**: algo como `https://abcdefghijk.supabase.co`
 - **Clave pública**: la llamada **anon public** o **publishable** (empieza por `eyJ…` o por `sb_publishable_…`).
 
 ⚠️ **No copies nunca** la clave **service_role** / **secret**: esa da acceso total y no debe ir en la web.
 
-## Paso 6 · Publicar la web en Netlify
+## Paso 6 · Publicar la web en Cloudflare
 
-1. Entra en <https://www.netlify.com> y regístrate con tu cuenta de GitHub (plan **Free**, que permite uso
-   profesional).
-2. Pulsa **Add new site → Import an existing project → GitHub** y elige el repositorio `certi-vertian`.
-3. Netlify detecta la configuración sola (`netlify.toml`). **Antes de desplegar**, en **Environment variables**
-   (o después, en *Site configuration → Environment variables*) añade estas dos:
+Se publica en la **misma cuenta de Cloudflare que el CRM**, como un Worker que solo sirve las pantallas (no tiene
+servidor ni claves secretas). Va incluido en el plan Workers que ya pagas para el CRM.
 
-   | Key | Value |
+1. Cloudflare → **Workers & Pages → Create → Import a repository** → elige el repositorio **certi-vertian**
+   (si no aparece, en *Manage GitHub permissions* dale acceso a Cloudflare).
+2. Rellena:
+
+   | Campo | Valor |
+   |---|---|
+   | Project name (nombre) | `certi-vertian` (tiene que ser exactamente este) |
+   | Build command (compilar) | `npm run build` |
+   | Deploy command (publicar) | `npx wrangler deploy` |
+   | Rama (branch) | `main` |
+
+3. Antes de pulsar **Create and deploy**, abre **Advanced settings → Build variables** (si no aparece, hazlo
+   después en *Settings → Build → Variables and secrets*) y añade:
+
+   | Variable | Valor |
    |---|---|
    | `VITE_SUPABASE_URL` | la *Project URL* del paso 5 |
    | `VITE_SUPABASE_CLAVE_PUBLICA` | la clave pública del paso 5 |
 
-4. Pulsa **Deploy**. En uno o dos minutos te dará una dirección tipo `https://nombre-aleatorio.netlify.app`.
-   Puedes cambiar el nombre en *Site configuration → Change site name*.
-5. Si añadiste las variables después del primer despliegue: *Deploys → Trigger deploy → Deploy site*.
+   Son variables **de compilación** (se meten en la web al publicarla), no las de *Variables and Secrets* de
+   ejecución. La dirección del CRM para el botón «Abrir en el CRM» ya va en `.env.production`.
+4. **Create and deploy**. En uno o dos minutos tendrás una dirección de prueba como
+   `https://certi-vertian.<tu-cuenta>.workers.dev`. Si añadiste las variables después, vuelve a publicar:
+   *Deployments → … → Retry deployment* (o haz cualquier cambio en `main`).
+5. **Tu dirección:** *Settings → Domains & Routes → Add → Custom domain* → `certi.vertiansolutions.es`. En unos
+   minutos funcionará con candado (HTTPS).
+
+Las cabeceras de seguridad (las que limitan con quién puede hablar la página) están en `public/_headers` y las
+aplica Cloudflare solo. Cada cambio en `main` se publica automáticamente.
+
+**Si vienes de Netlify:** cuando la dirección nueva funcione y hayas entrado con tu usuario, en Netlify →
+*Site configuration → General → Delete this site*. Si ya no lo usas para nada más, en GitHub → *Settings →
+Applications* puedes quitar también el acceso de Netlify.
 
 ## Paso 7 · Primer acceso
 
-1. Abre la dirección de Netlify en el móvil o el ordenador.
+1. Abre `https://certi.vertiansolutions.es` (o la de prueba `…workers.dev`) en el móvil o el ordenador.
 2. Entra con tu email y contraseña.
 3. La app te pedirá **activar la verificación en dos pasos**: escanea el código QR con Google/Microsoft
    Authenticator y escribe el código de 6 cifras.
@@ -130,6 +163,16 @@ En Supabase, abre **Project Settings** (la rueda dentada) → **API** (o **Data 
 
 **Consejo para el móvil:** en el navegador del móvil, menú → **Añadir a pantalla de inicio**. Tendrás un icono
 como si fuera una app.
+
+## Pasar al Supabase del CRM (si ya tenías CertiVertian instalado aparte)
+
+1. **Guarda una copia** de lo que tengas: en el Panel de CertiVertian, **Descargar copia completa**.
+2. Sigue los pasos 2 a 4 en el **Supabase del CRM**.
+3. Publica la web en Cloudflare con `VITE_SUPABASE_URL` y `VITE_SUPABASE_CLAVE_PUBLICA` **del CRM** (paso 6).
+4. Entra en CertiVertian con tu cuenta del CRM y activa la verificación en dos pasos.
+5. Los expedientes del Supabase antiguo **no pasan solos**. Si solo eran pruebas, empieza de cero. Si alguno es real,
+   la copia del paso 1 lo conserva (con sus documentos) y se puede volver a dar de alta. El proyecto antiguo puedes
+   pausarlo o borrarlo cuando ya no lo necesites.
 
 ---
 
@@ -171,6 +214,43 @@ Visita pendiente → Datos introducidos → Cálculo revisado → Certificado fi
 - Si algo no cuadra (letra que no corresponde a la escala del propio certificado, referencia catastral o fecha de
   visita distintas, certificado anterior a la visita, sin recomendaciones…) aparece un aviso que debes confirmar.
 - Al pulsar **Confirmar y pasar a «Cálculo revisado»** los resultados quedan congelados.
+
+## Conexión con el CRM (solicitudes de la web)
+
+CertiVertian usa la **misma base de datos que el CRM**, así que ve directamente sus **encargos de certificado**:
+
+- los **pedidos de certificado** que el cliente hace con su formulario del CRM:
+  - tipo de inmueble, superficie, dirección, código postal, población y referencia catastral;
+  - para qué lo quiere, plazo, contacto para la visita y mensaje;
+- los **presupuestos de certificados** en los que el cliente ha rellenado el inmueble en el trámite. Si el
+  presupuesto viene de un pedido, sale una sola vez, con los datos más completos;
+- y la **visita** que haya reservado.
+
+Aparecen en **Solicitudes** (menú de arriba, con el número de pendientes):
+
+1. Pulsa **Crear expediente**: se abre el formulario de siempre ya relleno (dirección, municipio, código postal,
+   referencia catastral, tipo de edificio, propietario, NIF, teléfono, email y fecha de la visita). En las notas van
+   el resto de datos del encargo. Arriba te dice qué revisar.
+2. Revisa y pulsa **Guardar**. Hasta entonces no se crea nada. El expediente queda **enlazado** a su pedido o
+   presupuesto del CRM.
+3. Después, en la toma de datos, completa el resto por **voz, texto o archivo** y genera el `.cex` desde la
+   **Ficha para CE3X**.
+
+Algunos datos no se copian a propósito:
+- La **superficie** que da el cliente es construida o aproximada. Va a las notas: la útil la mides tú.
+- Un tipo dudoso, como «Edificio completo», se deja para que lo elijas tú.
+- Si el inmueble no está en Asturias, se avisa.
+
+Si después el cliente cambia datos en el CRM o reserva la visita, al **Editar** el expediente verás lo que hay en el
+expediente al lado de lo que hay ahora en el CRM. Pulsa **Usar** en lo que quieras traer.
+
+**Descartar** quita un encargo de tus pendientes (por ejemplo, si no sigue adelante). En el CRM no cambia nada.
+
+**Seguridad:**
+- CertiVertian solo **lee** del CRM y solo los encargos de certificado, con los campos necesarios. No puede
+  modificar nada del CRM.
+- Solo lo ven las cuentas autorizadas en `tecnicos`, con la verificación en dos pasos.
+- Si en el CRM se borran los datos de un cliente (derecho de supresión), el expediente se conserva sin el enlace.
 
 ## Rellenar por voz, texto o archivo
 
@@ -308,11 +388,12 @@ Tú eres el **responsable del tratamiento** de los datos de propietarios y promo
 
 ```bash
 npm install
-cp .env.ejemplo .env.local     # y rellenar las dos variables
+cp .env.ejemplo .env.local     # y rellenar las variables
 npm run dev                    # http://localhost:5173
 npm test                       # pruebas de validaciones y toma de datos
 npm run typecheck
-npm run build                  # genera dist/ (lo que publica Netlify)
+npm run build                  # genera dist/ (lo que publica Cloudflare)
+npm run cf:dev                 # prueba dist/ en local tal como lo sirve Cloudflare
 ```
 
 Pruebas de la base de datos (Postgres 16 local, simula el `auth` de Supabase):
@@ -331,7 +412,8 @@ src/
 supabase/
   migrations/     esquema y seguridad (RLS) — se ejecutan en el SQL Editor
   tests/          pruebas SQL del flujo de estados y de la seguridad
-netlify.toml      publicación y cabeceras de seguridad
+wrangler.jsonc    publicación en Cloudflare (Worker certi-vertian)
+public/_headers   cabeceras de seguridad
 ```
 
 Principios del diseño:
