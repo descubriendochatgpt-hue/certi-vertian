@@ -99,16 +99,32 @@ describe('rellenar una plantilla .cex', () => {
     const r = rellenarPlantilla(plantilla(), exp, toma);
     const [, admin, gen, , , , , , , , , , , calc, huella] = leerPickles(escribirPickles(r.proyecto.bloques));
     const a = admin as Py[], g = gen as Py[];
-    expect(a.slice(0, 4)).toEqual(['Calle Ejemplo 1, 2º', 'Calle Ejemplo 1, 2º', 'Oviedo', 'Asturias']);
+    // La localidad (desplegable de CE3X) no se escribe: se queda como en la plantilla
+    expect(a.slice(0, 4)).toEqual(['Calle Ejemplo 1, 2º', 'Calle Ejemplo 1, 2º', '', 'Asturias']);
     expect(a[15]).toEqual(['0000000AA0000A0001AA']);
     expect(a[25]).toBe('Ingeniería Industrial'); // datos del técnico: de la plantilla
     expect(a[28]).toEqual(new PyBytes('ResidencialPrivado')); // conserva el tipo str
     expect([g[0], g[1], g[2], g[3], g[4], g[6], g[7], g[8], g[9], g[10], g[16], g[19]])
-      .toEqual(['Anterior', 'Vivienda Individual', 'Asturias', 'Oviedo', 'D1', '85.5', '2.5', '1', '112', 'Pesada', '0.63', '1972']);
+      .toEqual(['Anterior', 'Vivienda Individual', 'Asturias', '', '', '85.5', '2.5', '1', '112', 'Media', '0.63', '1972']);
+    // «Pesada» no se ha visto en un proyecto real: no se escribe (se queda la de la plantilla) y se pide elegirla
+    expect(r.pendientes).toEqual(expect.arrayContaining([
+      'Localidad: elige «Oviedo» en CE3X (en las pantallas 1 y 2; así asigna la zona climática)',
+      'Masa de las particiones: elige «Pesada» en CE3X',
+      'Zona climática: la asigna CE3X al elegir la localidad; comprueba que sale D1 (la que se tomó en la visita)',
+    ]));
     expect(calc).toBe(true);
     expect(texto(huella)).toBe('huella'); // la huella de CE3X no se toca
     expect(r.pendientes.join(' | ')).toMatch(/Cerramientos opacos: 1/);
     expect(r.avisos).toEqual([expect.stringMatching(/datos del cliente/)]);
+  });
+
+  it('nunca escribe en un desplegable un valor no visto en CE3X (lo cuelga al abrir)', () => {
+    const toma = tomaDatosVacia();
+    toma.generales = { clienteCodigoPostal: '46001', clienteDireccion: 'C/ Valencia 1' };
+    const r = rellenarPlantilla(plantilla(), { ...exp, provincia: 'Valencia', municipio: 'Valencia' } as Expediente, toma);
+    const [, admin, gen] = leerPickles(escribirPickles(r.proyecto.bloques)) as Py[][];
+    expect([admin![2], admin![3], admin![17], gen![2], gen![3], gen![4]]).toEqual(['', '', '', '', '', '']);
+    expect(r.pendientes).toEqual(expect.arrayContaining(['Provincia: elige «Valencia» en CE3X', 'Cliente: provincia: elige «Valencia» en CE3X']));
   });
 
   it('pantallas 1 y 2 completas: edificio, cliente y datos generales en su sitio', () => {
@@ -143,7 +159,7 @@ describe('rellenar una plantilla .cex', () => {
     expect(g[0]).toBe('Anterior'); // sin tocar
     expect(r.pendientes).toEqual(expect.arrayContaining([
       'Normativa vigente: elige «CTE 2006» en CE3X', 'Tipo de edificio (elígelo en CE3X)',
-      'Zona climática: la asigna CE3X por la localidad; comprueba que aparece',
+      'Zona climática: la asigna CE3X al elegir la localidad; comprueba que sale',
     ]));
   });
 

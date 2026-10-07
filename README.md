@@ -296,6 +296,10 @@ Arriba de la toma de datos está **Fichero para CE3X → ⬇ Generar .cex**.
   - datos generales: normativa, tipo, año, zona, superficies, viviendas, plantas y ACS.
 
   Al descargarlo te enseña qué ha puesto y qué queda por completar.
+- **Los desplegables de CE3X** solo se rellenan con valores comprobados en un proyecto real. Si el texto no
+  coincide exactamente con una de sus opciones, CE3X se cuelga al abrir el fichero.
+  - La **localidad** la eliges tú en CE3X (pantallas 1 y 2), y al hacerlo CE3X asigna la zona climática.
+  - Lo demás que no esté comprobado sale en la lista de pendientes con el texto exacto que hay que elegir.
 - **Envolvente e instalaciones todavía no** se escriben en el .cex: se introducen en CE3X con la «Ficha para
   CE3X». CE3X guarda con cada elemento valores que calcula él mismo, y hace falta un proyecto de prueba de cada tipo
   para escribirlos sin riesgo.
