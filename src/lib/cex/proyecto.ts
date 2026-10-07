@@ -109,6 +109,17 @@ export function rellenarPlantilla(plantilla: Uint8Array, exp: Expediente, toma: 
     rellenados.push({ etiqueta, antes, valor });
   };
 
+  /**
+   * Desplegables de CE3X: si el texto no coincide EXACTAMENTE con una de sus
+   * opciones, CE3X se queda colgado al abrir el fichero. Por eso solo se
+   * escriben valores vistos en un proyecto real; los demás quedan pendientes
+   * con el texto que hay que elegir.
+   */
+  const ponerOpcion = (bloque: Py[], i: number, etiqueta: string, valor: string | null | undefined, comprobados: string[]) => {
+    if (!valor) { pendientes.push(etiqueta); return; }
+    if (comprobados.includes(valor)) poner(bloque, i, etiqueta, valor);
+    else pendientes.push(`${etiqueta}: elige «${valor}» en CE3X`);
+  };
   const g = toma.generales;
   const txt = (v: Valor | undefined) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
   const nume = (v: Valor | undefined) => (typeof v === 'number' ? num(v) : undefined);
@@ -118,8 +129,10 @@ export function rellenarPlantilla(plantilla: Uint8Array, exp: Expediente, toma: 
   // Edificio
   poner(admin, 0, 'Nombre del edificio', txt(g.nombreEdificio) ?? exp.direccion);
   poner(admin, 1, 'Dirección', exp.direccion);
-  poner(admin, 3, 'Provincia', exp.provincia);
-  poner(admin, 2, 'Localidad', exp.municipio);
+  ponerOpcion(admin, 3, 'Provincia', exp.provincia, ['Asturias']);
+  // La localidad es un desplegable con los municipios de CE3X: se elige en
+  // CE3X (y así asigna también la zona climática)
+  pendientes.push(`Localidad: elige «${exp.municipio}» en CE3X (en las pantallas 1 y 2; así asigna la zona climática)`);
   poner(admin, 14, 'Código postal', exp.codigo_postal);
   if (exp.referencia_catastral && Array.isArray(admin[15])) {
     const rc = admin[15] as Py[];
@@ -134,7 +147,7 @@ export function rellenarPlantilla(plantilla: Uint8Array, exp: Expediente, toma: 
   // Cliente (los datos del técnico se quedan los de la plantilla)
   poner(admin, 5, 'Cliente: nombre o razón social', exp.propietario_nombre);
   poner(admin, 7, 'Cliente: dirección', txt(g.clienteDireccion));
-  poner(admin, 17, 'Cliente: provincia', provinciaCliente);
+  ponerOpcion(admin, 17, 'Cliente: provincia', provinciaCliente, ['Asturias']);
   poner(admin, 16, 'Cliente: localidad', txt(g.clienteLocalidad));
   poner(admin, 18, 'Cliente: código postal', txt(g.clienteCodigoPostal));
   poner(admin, 8, 'Cliente: teléfono', exp.propietario_telefono);
@@ -149,13 +162,11 @@ export function rellenarPlantilla(plantilla: Uint8Array, exp: Expediente, toma: 
   const TIPO: Partial<Record<Expediente['tipo_edificio'], string>> = { vivienda_en_bloque: 'Vivienda Individual' };
   const tipo = TIPO[exp.tipo_edificio];
   if (tipo) poner(gen, 1, 'Tipo de edificio', tipo); else pendientes.push('Tipo de edificio (elígelo en CE3X)');
-  poner(gen, 2, 'Provincia (datos generales)', exp.provincia);
-  poner(gen, 3, 'Localidad (datos generales)', exp.municipio);
+  ponerOpcion(gen, 2, 'Provincia (datos generales)', exp.provincia, ['Asturias']);
   poner(gen, 19, 'Año de construcción', exp.anio_construccion ? String(exp.anio_construccion) : nume(g.anioConstruccion));
   const zona = typeof g.zonaClimatica === 'string' && g.zonaClimatica !== 'otra' ? g.zonaClimatica : undefined;
-  // CE3X asigna la zona al elegir la localidad: solo se escribe si se tomó a mano
-  if (zona) poner(gen, 4, 'Zona climática', zona);
-  else pendientes.push('Zona climática: la asigna CE3X por la localidad; comprueba que aparece');
+  // CE3X asigna la zona al elegir la localidad: no se escribe
+  pendientes.push(`Zona climática: la asigna CE3X al elegir la localidad; comprueba que sale${zona ? ` ${zona} (la que se tomó en la visita)` : ''}`);
   poner(gen, 22, 'Superficie útil RD 390/2021 (m²)', nume(g.superficieUtilRd390));
   poner(gen, 6, 'Superficie cálculo CTE DB-HE (m²)', nume(g.superficieUtil));
   poner(gen, 23, 'Nº viviendas / unidades de uso', nume(g.numeroViviendas));
@@ -166,7 +177,9 @@ export function rellenarPlantilla(plantilla: Uint8Array, exp: Expediente, toma: 
   // Valores por defecto de CE3X: solo se cambian si en la visita se tomó otro valor
   if (typeof g.alturaLibre === 'number') poner(gen, 7, 'Altura libre de planta (m)', num(g.alturaLibre));
   if (typeof g.ventilacion === 'number') poner(gen, 16, 'Ventilación (ren/h)', num(g.ventilacion));
-  if (typeof g.masaParticiones === 'string') poner(gen, 10, 'Masa de las particiones', g.masaParticiones.charAt(0).toUpperCase() + g.masaParticiones.slice(1));
+  if (typeof g.masaParticiones === 'string') {
+    ponerOpcion(gen, 10, 'Masa de las particiones', g.masaParticiones.charAt(0).toUpperCase() + g.masaParticiones.slice(1), ['Media']);
+  }
 
   avisos.push('Las posiciones de los datos del cliente se han deducido de un proyecto en el que cliente y técnico tenían los mismos datos: comprueba en CE3X la pantalla «Datos administrativos».');
 
