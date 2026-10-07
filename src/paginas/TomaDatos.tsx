@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { cambiarEstado, guardarTomaDatos, obtenerExpediente, obtenerTomaDatos } from '../lib/api';
+import { cambiarEstado, catalogoCompleto, guardarTomaDatos, obtenerExpediente, obtenerTomaDatos } from '../lib/api';
 import { DECLARACION_ESTADO, type Expediente, esResidencial } from '../lib/estados';
 import { diasHasta, fecha, fechaHora } from '../lib/fechas';
 import {
@@ -12,7 +12,15 @@ import { CampoNumero, CampoOpcion, CampoSiNo, CampoTexto, ConfirmarAvisos } from
 import { ImportarDatos } from '../componentes/ImportarDatos';
 import { AsistenteVoz } from '../componentes/AsistenteVoz';
 import { GenerarCex } from '../componentes/GenerarCex';
-import { aplicarPropuesta } from '../lib/importarDatos';
+import { type Elemento, aplicarPropuesta } from '../lib/importarDatos';
+import { VisitasProcesadas } from '../componentes/VisitasProcesadas';
+import { DatosCatastro } from '../componentes/DatosCatastro';
+import { type Solucion, catalogoDePartida } from '../lib/cex/catalogo';
+import { solucionPara } from '../lib/cex/elementos';
+import { normativaAutomatica } from '../lib/asistenteVoz';
+
+/** Catálogo de soluciones de CE3X, para el campo «Solución de CE3X». */
+const Catalogo = createContext<Solucion[]>([]);
 import { type CopiaLocal, borrarCopiaLocal, guardarCopiaLocal, leerCopiaLocal } from '../lib/copiaLocal';
 
 type EstadoGuardado = 'guardado' | 'pendiente' | 'guardando' | 'sin_conexion' | 'error';
@@ -37,6 +45,9 @@ export function TomaDatos() {
   const [cargando, setCargando] = useState(true);
   const [declarado, setDeclarado] = useState(false);
   const [verificando, setVerificando] = useState(false);
+  const [catalogo, setCatalogo] = useState<Solucion[]>(() => catalogoDePartida());
+
+  useEffect(() => { catalogoCompleto().then(setCatalogo).catch(() => undefined); }, []);
 
   // Referencias para el autoguardado (evitan cerrar sobre valores viejos).
   const actual = useRef({ datos, confirmados });
@@ -159,6 +170,14 @@ export function TomaDatos() {
     }
   }
 
+  function aplicarVisita(elementos: Elemento[], observaciones: string) {
+    let d = aplicarPropuesta(datos, elementos, nuevoId);
+    if (observaciones) d = { ...d, observaciones: [d.observaciones, observaciones].filter(Boolean).join('\n') };
+    // La normativa sale del año de construcción
+    for (const a of normativaAutomatica(d, exp!)) d = { ...d, generales: { ...d.generales, [a.campo]: a.valor } };
+    cambiar(d);
+  }
+
   const secciones = SECCIONES.filter((s) => !s.soloTerciario || !esResidencial(exp.tipo_edificio) || datos[s.clave].length > 0);
 
   return (
@@ -204,7 +223,16 @@ export function TomaDatos() {
 
       {error && <div className="caja error">{error}</div>}
 
+      <Catalogo.Provider value={catalogo}>
+      {editable && (
+        <p className="acciones"><Link to={`/expedientes/${id}/visita`} className="boton principal">🎙 Grabar la visita (voz y fotos)</Link></p>
+      )}
+
+      <VisitasProcesadas expedienteId={id} datos={datos} catalogo={catalogo} editable={editable} onAplicar={aplicarVisita} />
+
       <GenerarCex exp={exp} toma={datos} enTomaDatos />
+
+      <DatosCatastro referencia={exp.referencia_catastral} datos={datos} editable={editable} anioExpediente={exp.anio_construccion} onCambio={(d) => cambiar(d)} />
 
       {editable && <AsistenteVoz exp={exp} datos={datos} onCambio={(d) => cambiar(d)} />}
 
@@ -262,6 +290,7 @@ export function TomaDatos() {
           </button>
         </section>
       )}
+      </Catalogo.Provider>
     </main>
   );
 }
@@ -287,6 +316,8 @@ function CampoDef({ def, fila, tipoEdificio, deshabilitado, onCambio }: {
     case 'opcion':
       return <CampoOpcion etiqueta={def.etiqueta} ayuda={def.ayuda} deshabilitado={deshabilitado} opciones={def.opciones ?? []}
                           valor={typeof v === 'string' ? v : ''} onCambio={(x) => onCambio(x || null)} />;
+    case 'solucion':
+      return <CampoSolucion def={def} fila={fila} deshabilitado={deshabilitado} onCambio={onCambio} />;
     case 'si_no':
       return <CampoSiNo etiqueta={def.etiqueta} ayuda={def.ayuda} deshabilitado={deshabilitado} valor={v === true} onCambio={onCambio} />;
     case 'texto_largo':
@@ -294,6 +325,24 @@ function CampoDef({ def, fila, tipoEdificio, deshabilitado, onCambio }: {
       return <CampoTexto etiqueta={def.etiqueta} ayuda={def.ayuda} deshabilitado={deshabilitado} largo={def.tipo === 'texto_largo'}
                          valor={typeof v === 'string' ? v : ''} onCambio={(x) => onCambio(x || null)} />;
   }
+}
+
+const SECCION_DE = { cerramiento: 'cerramientos', hueco: 'huecos', instalacion: 'instalaciones' } as const;
+
+/** Elegir la solución del catálogo de CE3X que se copiará al .cex. */
+function CampoSolucion({ def, fila, deshabilitado, onCambio }: {
+  def: DefCampo; fila: Record<string, Valor>; deshabilitado: boolean; onCambio: (v: Valor) => void;
+}) {
+  const catalogo = useContext(Catalogo);
+  const tipo = def.solucion ?? 'cerramiento';
+  const opciones = catalogo.filter((s) => s.tipo === tipo).map((s) => ({ valor: s.clave, etiqueta: s.etiqueta }));
+  const v = typeof fila[def.campo] === 'string' ? String(fila[def.campo]) : '';
+  const automatica = v ? undefined : solucionPara(SECCION_DE[tipo], { id: '', ...fila }, catalogo);
+  const ayuda = v
+    ? (catalogo.some((s) => s.clave === v) ? def.ayuda : 'Esta solución ya no está en el catálogo: elige otra.')
+    : automatica ? `Se usará: ${automatica.etiqueta}` : 'Ninguna encaja todavía: elige una o este elemento quedará pendiente en CE3X.';
+  return <CampoOpcion etiqueta={def.etiqueta} ayuda={ayuda} deshabilitado={deshabilitado} opciones={opciones}
+                      valor={v} onCambio={(x) => onCambio(x || null)} />;
 }
 
 function SeccionLista({ def, filas, tipoEdificio, deshabilitado, onCambio }: {

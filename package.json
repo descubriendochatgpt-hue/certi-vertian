@@ -15,6 +15,7 @@
     "cf:deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "@supabase/supabase-js": "^2.117.0",
     "fflate": "^0.8.3",
     "pdfjs-dist": "^4.10.38",

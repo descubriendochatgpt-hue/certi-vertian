@@ -64,6 +64,7 @@ export function DetalleExpediente() {
         {e.estado === 'visita_pendiente' && (
           <>
             <p><strong>Siguiente paso:</strong> rellenar la toma de datos de la visita y, una vez revisada, verificarla.</p>
+            <Link to={`/expedientes/${e.id}/visita`} className="boton principal">🎙 Grabar la visita</Link>
             <Link to={`/expedientes/${e.id}/toma-datos`} className="boton principal">Toma de datos de la visita</Link>
           </>
         )}
