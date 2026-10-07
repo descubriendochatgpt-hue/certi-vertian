@@ -142,7 +142,8 @@ describe('rellenar una plantilla .cex', () => {
     const g = r.proyecto.bloques[2] as Py[];
     expect(g[0]).toBe('Anterior'); // sin tocar
     expect(r.pendientes).toEqual(expect.arrayContaining([
-      'Normativa vigente (elígela en CE3X)', 'Tipo de edificio (elígelo en CE3X)', 'Zona climática',
+      'Normativa vigente: elige «CTE 2006» en CE3X', 'Tipo de edificio (elígelo en CE3X)',
+      'Zona climática: la asigna CE3X por la localidad; comprueba que aparece',
     ]));
   });
 

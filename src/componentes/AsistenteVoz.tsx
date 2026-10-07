@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { Expediente } from '../lib/estados';
 import type { DefCampo, Fila, SeccionLista, TomaDatos, Valor } from '../lib/tomaDatos';
 import { type Elemento, TITULO_DESTINO, describirValor } from '../lib/importarDatos';
+import { listarEncargos } from '../lib/api';
 import {
-  PANTALLAS, type Paso, comando, hayQuePreguntar, decirValor, detallesQueFaltan, guion, preguntaDe, respuestaCampo, respuestaElemento,
+  type ClienteCrm, PANTALLAS, type Paso, comando, normativaAutomatica, hayQuePreguntar, decirValor, detallesQueFaltan, guion, preguntaDe, respuestaCampo, respuestaElemento,
   valoresAutomaticos,
 } from '../lib/asistenteVoz';
 
@@ -160,9 +161,17 @@ export function AsistenteVoz({ exp, datos, onCambio }: {
     void hablar([previo, 'He terminado. Revisa los datos y genera el fichero de CE3X.'].filter(Boolean).join(' '));
   }
 
-  function empezar() {
+  async function empezar() {
+    // Dirección del cliente: la de su ficha del CRM, si el expediente viene de un encargo
+    let clienteCrm: ClienteCrm | null = null;
+    if (exp.crm_pedido_id || exp.crm_presupuesto_id) {
+      try {
+        const e = (await listarEncargos()).find((x) => x.expediente_id === exp.id);
+        if (e?.cliente && typeof e.cliente === 'object') clienteCrm = e.cliente as ClienteCrm;
+      } catch { /* sin CRM: se usa la dirección del inmueble */ }
+    }
     let d = datosRef.current;
-    const auto = valoresAutomaticos(d, exp);
+    const auto = valoresAutomaticos(d, exp, clienteCrm);
     if (auto.length) {
       d = { ...d, generales: { ...d.generales, ...Object.fromEntries(auto.map((a) => [a.campo, a.valor])) } };
       cambiar(d);
@@ -172,8 +181,9 @@ export function AsistenteVoz({ exp, datos, onCambio }: {
     setActivo(true);
     setPasos(lista);
     setApuntes(auto.map((a) => ({ pregunta: 'Automático', respuesta: a.motivo, ok: true })));
-    const n = lista.filter((p) => p.tipo === 'campo').length;
-    void preguntar(lista, 0, `Vamos a rellenar los datos para CE3X. Te haré ${n} preguntas y después describirás la envolvente y las instalaciones. Puedes decir «saltar», «atrás», «repetir» o «parar».`);
+    const n = lista.filter((p) => p.tipo === 'campo' && hayQuePreguntar(p, d)).length;
+    const yaPuestos = auto.length ? `He rellenado ${auto.length} datos que ya conocía; los tienes en la lista. ` : '';
+    void preguntar(lista, 0, `${yaPuestos}Te haré ${n} preguntas y después describirás la envolvente y las instalaciones. Puedes decir «saltar», «atrás», «repetir» o «parar».`);
   }
 
   const apuntar = (pregunta: string, respuesta: string, ok: boolean) =>
@@ -231,9 +241,14 @@ export function AsistenteVoz({ exp, datos, onCambio }: {
       const r = respuestaCampo(p.def, t);
       if ('error' in r) { apuntar(p.def.etiqueta, t, false); setMensaje(r.error); await decirYEscuchar(r.error); return; }
       const d = datosRef.current;
-      cambiar({ ...d, generales: { ...d.generales, [p.def.campo]: r.valor } });
+      let nuevos: TomaDatos = { ...d, generales: { ...d.generales, [p.def.campo]: r.valor } };
+      // Con el año, la normativa sale sola
+      const derivados = normativaAutomatica(nuevos, exp);
+      if (derivados.length) nuevos = { ...nuevos, generales: { ...nuevos.generales, ...Object.fromEntries(derivados.map((a) => [a.campo, a.valor])) } };
+      cambiar(nuevos);
       apuntar(p.def.etiqueta, decirValor(p.def, r.valor), true);
-      await preguntar(ps, i + 1, `Anotado: ${decirValor(p.def, r.valor)}.`);
+      derivados.forEach((a) => apuntar('Automático', a.motivo, true));
+      await preguntar(ps, i + 1, `Anotado: ${decirValor(p.def, r.valor)}.${derivados.length ? ` ${derivados[0]!.motivo}` : ''}`);
       return;
     }
 
@@ -287,7 +302,7 @@ export function AsistenteVoz({ exp, datos, onCambio }: {
           ventilación, masa…). Contestas hablando o escribiendo.
         </p>
         <div className="acciones">
-          <button type="button" className="principal" onClick={empezar}>🎙 Empezar el asistente</button>
+          <button type="button" className="principal" onClick={() => void empezar()}>🎙 Empezar el asistente</button>
           <label className="campo-casilla"><input type="checkbox" checked={manosLibres} onChange={(e) => setManosLibres(e.target.checked)} /> Manos libres (escucha sola tras cada pregunta)</label>
         </div>
         {!hayDictado && <small className="ayuda">Este navegador no tiene dictado: el asistente te preguntará y responderás escribiendo.</small>}

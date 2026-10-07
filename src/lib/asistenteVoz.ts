@@ -84,17 +84,18 @@ export function guion(toma: TomaDatos, exp: Pick<Expediente, 'tipo_edificio' | '
   };
   const vivienda = exp.tipo_edificio === 'vivienda_unifamiliar' || exp.tipo_edificio === 'vivienda_en_bloque';
 
-  // 1. Datos administrativos (dirección, catastro y propietario ya están en el expediente)
-  for (const c of ['nombreEdificio', 'gradoProteccion']) campo('Datos administrativos', CAMPOS_ADMINISTRATIVOS, c);
+  // 1. Datos administrativos: edificio y propietario salen del expediente; el
+  // cliente, del CRM (o la dirección del inmueble); protección y uso, por
+  // defecto (valoresAutomaticos). Solo se pregunta lo que siga sin saberse.
   if (!esResidencial(exp.tipo_edificio)) campo('Datos administrativos', CAMPOS_ADMINISTRATIVOS, 'usoEdificio');
   for (const c of ['clienteDireccion', 'clienteLocalidad', 'clienteCodigoPostal']) campo('Datos administrativos', CAMPOS_ADMINISTRATIVOS, c);
-  // La provincia sale del código postal; solo se pregunta si no hay forma de saberla.
   if (!/^\d{5}$/.test(String(g.clienteCodigoPostal ?? ''))) campo('Datos administrativos', CAMPOS_ADMINISTRATIVOS, 'clienteProvincia');
 
-  // 2. Datos generales (tipo de edificio, provincia y localidad: del expediente)
-  campo('Datos generales', CAMPOS_GENERALES, 'normativa');
+  // 2. Datos generales. Tipo, provincia y localidad: del expediente. La
+  // normativa sale del año de construcción y la zona climática la asigna
+  // CE3X al elegir la localidad: no se preguntan.
   if (!exp.anio_construccion) campo('Datos generales', CAMPOS_GENERALES, 'anioConstruccion');
-  campo('Datos generales', CAMPOS_GENERALES, 'zonaClimatica');
+  campo('Datos generales', CAMPOS_GENERALES, 'normativa');   // solo si no hay año (ver hayQuePreguntar)
   for (const c of ['superficieUtilRd390', 'superficieUtil']) campo('Datos generales', CAMPOS_GENERALES, c);
   if (!vivienda) campo('Datos generales', CAMPOS_GENERALES, 'numeroViviendas');
   for (const c of ['numeroPlantas', 'plantasSobreRasante', 'plantasBajoRasante', 'demandaAcs']) campo('Datos generales', CAMPOS_GENERALES, c);
@@ -114,21 +115,78 @@ export function hayQuePreguntar(paso: Paso, toma: TomaDatos): boolean {
   if (paso.tipo === 'lista') return true;
   const g = toma.generales;
   if (!vacio(g[paso.def.campo])) return false;
+  if (paso.def.campo === 'normativa' && typeof g.anioConstruccion === 'number') return false;
   if (paso.def.campo === 'clienteProvincia' && /^\d{5}$/.test(String(g.clienteCodigoPostal ?? ''))) return false;
   return true;
 }
 
-/** Datos que se rellenan solos al empezar (sin preguntar), con su explicación. */
-export function valoresAutomaticos(toma: TomaDatos, exp: Pick<Expediente, 'tipo_edificio'>): { campo: string; valor: Valor; motivo: string }[] {
+/**
+ * Normativa vigente según el año de construcción (fin de obra):
+ * hasta 1979 anterior a la NBE-CT-79; 1980–2006 NBE-CT-79; 2007–2013
+ * CTE 2006; 2014–2019 CTE 2013; desde 2020 CTE 2019. En los años frontera
+ * manda la fecha de la licencia: por eso se avisa para revisarla.
+ */
+export function normativaPorAnio(anio: number): { valor: string; dudoso: boolean } {
+  const valor = anio <= 1979 ? 'anterior_ct79' : anio <= 2006 ? 'ct79' : anio <= 2013 ? 'cte2006' : anio <= 2019 ? 'cte2013' : 'cte2019';
+  return { valor, dudoso: [1979, 1980, 1981, 2006, 2007, 2008, 2013, 2014, 2019, 2020].includes(anio) };
+}
+
+const ETIQUETA_NORMATIVA: Record<string, string> = {
+  anterior_ct79: 'anterior a la NBE-CT-79', ct79: 'NBE-CT-79', cte2006: 'CTE 2006', cte2013: 'CTE 2013', cte2019: 'CTE 2019',
+};
+
+export interface Automatico { campo: string; valor: Valor; motivo: string }
+
+/** Dirección del cliente en el CRM (la de facturación), si la hay. */
+export interface ClienteCrm { direccion?: string | null; codigo_postal?: string | null; ciudad?: string | null; provincia?: string | null }
+
+/**
+ * Datos que se rellenan solos, sin preguntar, con su explicación. Solo
+ * rellenan campos vacíos: nunca cambian lo que ya hay.
+ */
+export function valoresAutomaticos(
+  toma: TomaDatos,
+  exp: Pick<Expediente, 'tipo_edificio' | 'anio_construccion' | 'direccion' | 'municipio' | 'codigo_postal' | 'provincia'>,
+  clienteCrm?: ClienteCrm | null,
+): Automatico[] {
   const g = toma.generales;
-  const r: { campo: string; valor: Valor; motivo: string }[] = [];
-  if (esResidencial(exp.tipo_edificio) && vacio(g.usoEdificio)) {
-    r.push({ campo: 'usoEdificio', valor: 'residencial_privado', motivo: 'Uso: residencial privado (es una vivienda).' });
+  const r: Automatico[] = [];
+  const poner = (campo: string, valor: Valor, motivo: string) => { if (vacio(g[campo]) && !vacio(valor)) r.push({ campo, valor, motivo }); };
+  const vivienda = exp.tipo_edificio === 'vivienda_unifamiliar' || exp.tipo_edificio === 'vivienda_en_bloque';
+
+  // Pantalla 1
+  poner('gradoProteccion', 'ninguna', 'Grado de protección: ninguno (cámbialo si el edificio está protegido).');
+  if (esResidencial(exp.tipo_edificio)) poner('usoEdificio', 'residencial_privado', 'Uso: residencial privado (es una vivienda).');
+  const crm = clienteCrm && (clienteCrm.direccion || clienteCrm.ciudad) ? clienteCrm : null;
+  if (crm) {
+    poner('clienteDireccion', crm.direccion ?? '', 'Dirección del cliente: la de su ficha del CRM.');
+    poner('clienteLocalidad', crm.ciudad ?? '', 'Localidad del cliente: la de su ficha del CRM.');
+    poner('clienteCodigoPostal', crm.codigo_postal ?? '', 'Código postal del cliente: el de su ficha del CRM.');
+    poner('clienteProvincia', crm.provincia ?? '', 'Provincia del cliente: la de su ficha del CRM.');
+  } else {
+    const nota = ' (no hay otra en el CRM; cámbiala si el cliente vive en otro sitio)';
+    poner('clienteDireccion', exp.direccion, `Dirección del cliente: la del inmueble${nota}.`);
+    poner('clienteLocalidad', exp.municipio, `Localidad del cliente: la del inmueble${nota}.`);
+    poner('clienteCodigoPostal', exp.codigo_postal ?? '', `Código postal del cliente: el del inmueble${nota}.`);
+    poner('clienteProvincia', exp.provincia, `Provincia del cliente: la del inmueble${nota}.`);
   }
-  if ((exp.tipo_edificio === 'vivienda_unifamiliar' || exp.tipo_edificio === 'vivienda_en_bloque') && vacio(g.numeroViviendas)) {
-    r.push({ campo: 'numeroViviendas', valor: 1, motivo: 'Unidades de uso: 1 (una vivienda).' });
-  }
+
+  // Pantalla 2
+  if (vivienda) poner('numeroViviendas', 1, 'Unidades de uso: 1 (una vivienda).');
+  r.push(...normativaAutomatica(toma, exp));
   return r;
+}
+
+/** Normativa a partir del año (del expediente o el dictado), si aún no está puesta. */
+export function normativaAutomatica(toma: TomaDatos, exp: Pick<Expediente, 'anio_construccion'>): Automatico[] {
+  const g = toma.generales;
+  const anio = exp.anio_construccion ?? (typeof g.anioConstruccion === 'number' ? g.anioConstruccion : null);
+  if (!vacio(g.normativa) || !anio) return [];
+  const n = normativaPorAnio(anio);
+  return [{
+    campo: 'normativa', valor: n.valor,
+    motivo: `Normativa: ${ETIQUETA_NORMATIVA[n.valor]} (por el año ${anio})${n.dudoso ? '; es un año frontera: compruébala con la fecha de la licencia' : ''}.`,
+  }];
 }
 
 /** Detalles que se preguntan después de describir un elemento, si no se han dicho. */

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  comando, detallesQueFaltan, hayQuePreguntar, elegirOpcion, guion, leerNumeroHablado, respuestaCampo, respuestaElemento, valoresAutomaticos,
+  comando, detallesQueFaltan, hayQuePreguntar, normativaAutomatica, normativaPorAnio, elegirOpcion, guion, leerNumeroHablado, respuestaCampo, respuestaElemento, valoresAutomaticos,
 } from '../asistenteVoz';
 import { CAMPOS_ADMINISTRATIVOS, CAMPOS_GENERALES, CAMPOS_HUECO, CAMPOS_INSTALACION, tomaDatosVacia } from '../tomaDatos';
 
 const def = (lista: typeof CAMPOS_GENERALES, c: string) => lista.find((d) => d.campo === c)!;
-const exp = { tipo_edificio: 'vivienda_en_bloque' as const, anio_construccion: null, codigo_postal: '33003' };
+const exp = { tipo_edificio: 'vivienda_en_bloque' as const, anio_construccion: null as number | null, codigo_postal: '33003', direccion: 'C/ Uría 1', municipio: 'Oviedo', provincia: 'Asturias' };
 
 describe('números dichos en voz alta', () => {
   it.each([
@@ -58,29 +58,46 @@ describe('opciones y órdenes', () => {
 });
 
 describe('guion', () => {
-  it('pregunta las pantallas en orden y no pregunta lo predefinido ni lo ya sabido', () => {
+  it('pantalla 1 sin preguntas: lo conocido se rellena solo; sin zona; normativa por el año', () => {
     const t = tomaDatosVacia();
-    t.generales = { superficieUtil: 80, clienteDireccion: 'C/ X' };
-    const p = guion(t, exp);
-    const campos = p.flatMap((x) => (x.tipo === 'campo' ? [x.def.campo] : [x.pantalla]));
+    const auto = valoresAutomaticos(t, exp);
+    t.generales = Object.fromEntries(auto.map((a) => [a.campo, a.valor]));
+    const campos = guion(t, exp).filter((x) => x.tipo === 'lista' || hayQuePreguntar(x, t))
+      .flatMap((x) => (x.tipo === 'campo' ? [x.def.campo] : [x.pantalla]));
     expect(campos).toEqual([
-      'nombreEdificio', 'gradoProteccion', 'clienteLocalidad', 'clienteCodigoPostal', 'clienteProvincia',
-      'normativa', 'anioConstruccion', 'zonaClimatica', 'superficieUtilRd390',
+      'anioConstruccion', 'normativa', 'superficieUtilRd390', 'superficieUtil',
       'numeroPlantas', 'plantasSobreRasante', 'plantasBajoRasante', 'demandaAcs',
       'Envolvente térmica', 'Instalaciones',
     ]);
-    // Nunca: altura libre, ventilación ni masa (valores por defecto de CE3X)
-    expect(campos).not.toContain('alturaLibre');
-    expect(campos).not.toContain('ventilacion');
-    expect(campos).not.toContain('masaParticiones');
+    for (const no of ['zonaClimatica', 'alturaLibre', 'ventilacion', 'masaParticiones', 'nombreEdificio', 'gradoProteccion', 'clienteDireccion']) {
+      expect(campos).not.toContain(no);
+    }
+    // Sin CRM, el cliente toma la dirección del inmueble
+    expect(t.generales).toMatchObject({ clienteDireccion: 'C/ Uría 1', clienteLocalidad: 'Oviedo', clienteCodigoPostal: '33003', clienteProvincia: 'Asturias', gradoProteccion: 'ninguna', usoEdificio: 'residencial_privado', numeroViviendas: 1 });
   });
 
-  it('con año en el expediente y código postal del cliente, no los pregunta', () => {
+  it('el cliente del CRM manda sobre la dirección del inmueble, y nunca se pisa lo ya puesto', () => {
     const t = tomaDatosVacia();
-    t.generales = { clienteCodigoPostal: '33003' };
-    const campos = guion(t, { ...exp, anio_construccion: 1975 }).flatMap((x) => (x.tipo === 'campo' ? [x.def.campo] : []));
-    expect(campos).not.toContain('anioConstruccion');
-    expect(campos).not.toContain('clienteProvincia');
+    t.generales = { clienteLocalidad: 'Avilés' };
+    const auto = Object.fromEntries(valoresAutomaticos(t, exp, { direccion: 'C/ Facturación 3', codigo_postal: '33001', ciudad: 'Oviedo' }).map((a) => [a.campo, a.valor]));
+    expect(auto.clienteDireccion).toBe('C/ Facturación 3');
+    expect(auto.clienteCodigoPostal).toBe('33001');
+    expect(auto).not.toHaveProperty('clienteLocalidad');
+  });
+
+  it('normativa por el año de construcción (y aviso en los años frontera)', () => {
+    expect(normativaPorAnio(1965)).toEqual({ valor: 'anterior_ct79', dudoso: false });
+    expect(normativaPorAnio(1990)).toEqual({ valor: 'ct79', dudoso: false });
+    expect(normativaPorAnio(2010).valor).toBe('cte2006');
+    expect(normativaPorAnio(2016).valor).toBe('cte2013');
+    expect(normativaPorAnio(2022).valor).toBe('cte2019');
+    expect(normativaPorAnio(2007).dudoso).toBe(true);
+    const t = tomaDatosVacia();
+    expect(normativaAutomatica(t, { anio_construccion: 1974 })[0]).toMatchObject({ valor: 'anterior_ct79' });
+    t.generales.anioConstruccion = 2015;
+    expect(normativaAutomatica(t, { anio_construccion: null })[0]).toMatchObject({ valor: 'cte2013' });
+    const p = guion(t, exp).find((x) => x.tipo === 'campo' && x.def.campo === 'normativa')!;
+    expect(hayQuePreguntar(p, t)).toBe(false);
   });
 
   it('antes de cada pregunta se comprueba si ya se sabe la respuesta', () => {
@@ -89,11 +106,6 @@ describe('guion', () => {
     expect(hayQuePreguntar(p, t)).toBe(true);
     t.generales.clienteCodigoPostal = '33201';
     expect(hayQuePreguntar(p, t)).toBe(false);
-  });
-
-  it('una vivienda: uso residencial privado y 1 unidad, sin preguntar', () => {
-    expect(valoresAutomaticos(tomaDatosVacia(), exp).map((v) => [v.campo, v.valor])).toEqual([['usoEdificio', 'residencial_privado'], ['numeroViviendas', 1]]);
-    expect(valoresAutomaticos(tomaDatosVacia(), { tipo_edificio: 'local_terciario' })).toEqual([]);
   });
 });
 
