@@ -1,0 +1,19 @@
+// Publicación en Cloudflare Workers (la misma cuenta que el CRM).
+// CertiVertian es una web estática: el Worker solo sirve los ficheros de
+// dist/. Los datos van directamente del navegador a Supabase.
+// Las claves NO van aquí: VITE_SUPABASE_URL y VITE_SUPABASE_CLAVE_PUBLICA se
+// ponen en Cloudflare → Workers → certi-vertian → Settings → Build →
+// Variables and secrets (se usan al compilar). Ver README, paso 6.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "certi-vertian",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    // Cualquier ruta (/expedientes/…) la resuelve la propia app
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

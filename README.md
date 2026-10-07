@@ -24,12 +24,12 @@ Herramienta web para organizar el trabajo de emisión de **certificados de efici
 
 ## Cómo funciona (en una frase)
 
-La app es una **página web** alojada gratis en **Netlify**. Sus datos se guardan en el **mismo Supabase que el CRM de
+La app es una **página web** publicada en **Cloudflare**, en la misma cuenta que el CRM. Sus datos se guardan en el **mismo Supabase que el CRM de
 Vertian** (Unión Europea), en tablas propias. Así lee directamente los pedidos de certificado del CRM, sin copiar
-nada entre dos bases de datos. Tu navegador habla directamente con Supabase: **los datos no pasan por Netlify**.
+nada entre dos bases de datos. Tu navegador habla directamente con Supabase: **los datos no pasan por Cloudflare**.
 
 ```
- Móvil / ordenador  ──(pantallas)──▶  Netlify (gratis)
+ Móvil / ordenador  ──(pantallas)──▶  Cloudflare (Worker certi-vertian)
         │
         └──────────(datos, cifrados)──▶  Supabase del CRM (UE)
                                           ├─ tablas del CRM (clientes, pedidos, presupuestos…)
@@ -114,27 +114,48 @@ En el Supabase del CRM, abre **Project Settings** (la rueda dentada) → **API**
 
 ⚠️ **No copies nunca** la clave **service_role** / **secret**: esa da acceso total y no debe ir en la web.
 
-## Paso 6 · Publicar la web en Netlify
+## Paso 6 · Publicar la web en Cloudflare
 
-1. Entra en <https://www.netlify.com> y regístrate con tu cuenta de GitHub (plan **Free**, que permite uso
-   profesional).
-2. Pulsa **Add new site → Import an existing project → GitHub** y elige el repositorio `certi-vertian`.
-3. Netlify detecta la configuración sola (`netlify.toml`). **Antes de desplegar**, en **Environment variables**
-   (o después, en *Site configuration → Environment variables*) añade estas dos:
+Se publica en la **misma cuenta de Cloudflare que el CRM**, como un Worker que solo sirve las pantallas (no tiene
+servidor ni claves secretas). Va incluido en el plan Workers que ya pagas para el CRM.
 
-   | Key | Value |
+1. Cloudflare → **Workers & Pages → Create → Import a repository** → elige el repositorio **certi-vertian**
+   (si no aparece, en *Manage GitHub permissions* dale acceso a Cloudflare).
+2. Rellena:
+
+   | Campo | Valor |
+   |---|---|
+   | Project name (nombre) | `certi-vertian` (tiene que ser exactamente este) |
+   | Build command (compilar) | `npm run build` |
+   | Deploy command (publicar) | `npx wrangler deploy` |
+   | Rama (branch) | `main` |
+
+3. Antes de pulsar **Create and deploy**, abre **Advanced settings → Build variables** (si no aparece, hazlo
+   después en *Settings → Build → Variables and secrets*) y añade:
+
+   | Variable | Valor |
    |---|---|
    | `VITE_SUPABASE_URL` | la *Project URL* del paso 5 |
    | `VITE_SUPABASE_CLAVE_PUBLICA` | la clave pública del paso 5 |
-   | `VITE_CRM_URL` | (opcional) la dirección del CRM, p. ej. `https://crm.vertiansolutions.es`, para el botón «Abrir en el CRM» |
 
-4. Pulsa **Deploy**. En uno o dos minutos te dará una dirección tipo `https://nombre-aleatorio.netlify.app`.
-   Puedes cambiar el nombre en *Site configuration → Change site name*.
-5. Si añadiste las variables después del primer despliegue: *Deploys → Trigger deploy → Deploy site*.
+   Son variables **de compilación** (se meten en la web al publicarla), no las de *Variables and Secrets* de
+   ejecución. La dirección del CRM para el botón «Abrir en el CRM» ya va en `.env.production`.
+4. **Create and deploy**. En uno o dos minutos tendrás una dirección de prueba como
+   `https://certi-vertian.<tu-cuenta>.workers.dev`. Si añadiste las variables después, vuelve a publicar:
+   *Deployments → … → Retry deployment* (o haz cualquier cambio en `main`).
+5. **Tu dirección:** *Settings → Domains & Routes → Add → Custom domain* → `certi.vertiansolutions.es`. En unos
+   minutos funcionará con candado (HTTPS).
+
+Las cabeceras de seguridad (las que limitan con quién puede hablar la página) están en `public/_headers` y las
+aplica Cloudflare solo. Cada cambio en `main` se publica automáticamente.
+
+**Si vienes de Netlify:** cuando la dirección nueva funcione y hayas entrado con tu usuario, en Netlify →
+*Site configuration → General → Delete this site*. Si ya no lo usas para nada más, en GitHub → *Settings →
+Applications* puedes quitar también el acceso de Netlify.
 
 ## Paso 7 · Primer acceso
 
-1. Abre la dirección de Netlify en el móvil o el ordenador.
+1. Abre `https://certi.vertiansolutions.es` (o la de prueba `…workers.dev`) en el móvil o el ordenador.
 2. Entra con tu email y contraseña.
 3. La app te pedirá **activar la verificación en dos pasos**: escanea el código QR con Google/Microsoft
    Authenticator y escribe el código de 6 cifras.
@@ -147,8 +168,7 @@ como si fuera una app.
 
 1. **Guarda una copia** de lo que tengas: en el Panel de CertiVertian, **Descargar copia completa**.
 2. Sigue los pasos 2 a 4 en el **Supabase del CRM**.
-3. En Netlify, cambia `VITE_SUPABASE_URL` y `VITE_SUPABASE_CLAVE_PUBLICA` por los del CRM (paso 6) y vuelve a
-   desplegar: *Deploys → Trigger deploy → Deploy site*.
+3. Publica la web en Cloudflare con `VITE_SUPABASE_URL` y `VITE_SUPABASE_CLAVE_PUBLICA` **del CRM** (paso 6).
 4. Entra en CertiVertian con tu cuenta del CRM y activa la verificación en dos pasos.
 5. Los expedientes del Supabase antiguo **no pasan solos**. Si solo eran pruebas, empieza de cero. Si alguno es real,
    la copia del paso 1 lo conserva (con sus documentos) y se puede volver a dar de alta. El proyecto antiguo puedes
@@ -368,11 +388,12 @@ Tú eres el **responsable del tratamiento** de los datos de propietarios y promo
 
 ```bash
 npm install
-cp .env.ejemplo .env.local     # y rellenar las dos variables
+cp .env.ejemplo .env.local     # y rellenar las variables
 npm run dev                    # http://localhost:5173
 npm test                       # pruebas de validaciones y toma de datos
 npm run typecheck
-npm run build                  # genera dist/ (lo que publica Netlify)
+npm run build                  # genera dist/ (lo que publica Cloudflare)
+npm run cf:dev                 # prueba dist/ en local tal como lo sirve Cloudflare
 ```
 
 Pruebas de la base de datos (Postgres 16 local, simula el `auth` de Supabase):
@@ -391,7 +412,8 @@ src/
 supabase/
   migrations/     esquema y seguridad (RLS) — se ejecutan en el SQL Editor
   tests/          pruebas SQL del flujo de estados y de la seguridad
-netlify.toml      publicación y cabeceras de seguridad
+wrangler.jsonc    publicación en Cloudflare (Worker certi-vertian)
+public/_headers   cabeceras de seguridad
 ```
 
 Principios del diseño:
