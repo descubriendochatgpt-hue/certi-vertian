@@ -258,9 +258,16 @@ expediente al lado de lo que hay ahora en el CRM. Pulsa **Usar** en lo que quier
 
 En la toma de datos, **🎙 Empezar el asistente** te guía por las cuatro pantallas de CE3X, en su orden:
 
-1. **Datos administrativos:** nombre del edificio, grado de protección y datos del cliente. Dirección, catastro y
-   propietario ya salen del expediente.
-2. **Datos generales:** normativa, año, zona climática, superficies, viviendas, plantas y ACS.
+1. **Datos administrativos:** no pregunta nada que ya se sepa:
+   - edificio y propietario salen del expediente;
+   - la dirección del cliente sale de su ficha del CRM, o, si no la hay, se usa la del inmueble;
+   - grado de protección «ninguno» y uso «residencial privado» en viviendas.
+
+   Todo lo puesto así aparece en «Lo que he apuntado» para que lo revises.
+2. **Datos generales:** año (si no está en el expediente), superficies, plantas y ACS.
+   - La **normativa** sale del año de construcción, con aviso en los años frontera, donde manda la fecha de la
+     licencia.
+   - La **zona climática** no se pregunta: CE3X la asigna al elegir la localidad.
 3. **Envolvente térmica:** describes cada elemento («fachada norte de 25 metros cuadrados», «ventana sur de 1,20
    por 1,50, doble vidrio») y solo te pregunta lo que falte (superficie, orientación, vidrio, marco…). Di
    «terminado» para pasar a lo siguiente.

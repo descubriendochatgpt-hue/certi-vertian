@@ -143,7 +143,8 @@ export function rellenarPlantilla(plantilla: Uint8Array, exp: Expediente, toma: 
   // ── Pantalla 2 · Datos generales (bloque 2) ──
   const NORMATIVA: Record<string, string> = { anterior_ct79: 'Anterior' };
   const normativa = typeof g.normativa === 'string' ? NORMATIVA[g.normativa] : undefined;
-  if (g.normativa && !normativa) pendientes.push('Normativa vigente (elígela en CE3X)');
+  const NOMBRE_NORMATIVA: Record<string, string> = { ct79: 'NBE-CT-79', cte2006: 'CTE 2006', cte2013: 'CTE 2013', cte2019: 'CTE 2019' };
+  if (g.normativa && !normativa) pendientes.push(`Normativa vigente: elige «${NOMBRE_NORMATIVA[String(g.normativa)] ?? String(g.normativa)}» en CE3X`);
   else poner(gen, 0, 'Normativa vigente', normativa);
   const TIPO: Partial<Record<Expediente['tipo_edificio'], string>> = { vivienda_en_bloque: 'Vivienda Individual' };
   const tipo = TIPO[exp.tipo_edificio];
@@ -152,7 +153,9 @@ export function rellenarPlantilla(plantilla: Uint8Array, exp: Expediente, toma: 
   poner(gen, 3, 'Localidad (datos generales)', exp.municipio);
   poner(gen, 19, 'Año de construcción', exp.anio_construccion ? String(exp.anio_construccion) : nume(g.anioConstruccion));
   const zona = typeof g.zonaClimatica === 'string' && g.zonaClimatica !== 'otra' ? g.zonaClimatica : undefined;
-  poner(gen, 4, 'Zona climática', zona);
+  // CE3X asigna la zona al elegir la localidad: solo se escribe si se tomó a mano
+  if (zona) poner(gen, 4, 'Zona climática', zona);
+  else pendientes.push('Zona climática: la asigna CE3X por la localidad; comprueba que aparece');
   poner(gen, 22, 'Superficie útil RD 390/2021 (m²)', nume(g.superficieUtilRd390));
   poner(gen, 6, 'Superficie cálculo CTE DB-HE (m²)', nume(g.superficieUtil));
   poner(gen, 23, 'Nº viviendas / unidades de uso', nume(g.numeroViviendas));
