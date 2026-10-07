@@ -6,6 +6,7 @@ import { supabase } from './supabase';
 import type { AnotacionHistorial, Calificacion, Estado, Expediente } from './estados';
 import { type TomaDatos, VERSION_ESQUEMA, normalizarTomaDatos } from './tomaDatos';
 import { type Resultados, resultadosVacios } from './resultados';
+import type { EstadoSolicitud, SolicitudCrm } from './solicitudesCrm';
 
 export class ErrorDatos extends Error {}
 
@@ -276,4 +277,30 @@ export async function borrarAdjunto(a: Adjunto): Promise<void> {
   const filas = comprobar(await supabase.from('adjuntos').delete().eq('id', a.id).select('id')) as { id: string }[];
   if (filas.length === 0) throw new ErrorDatos('Este documento ya no se puede borrar (el expediente está registrado).');
   await supabase.storage.from(CUBO).remove([a.ruta]);
+}
+
+// ─────────────────────────── Solicitudes del CRM ──────────────────────────
+
+export async function listarSolicitudes(estado: EstadoSolicitud | 'todas' = 'pendiente'): Promise<SolicitudCrm[]> {
+  let q = supabase.from('solicitudes_crm').select('*').order('actualizada_en', { ascending: false }).limit(200);
+  if (estado !== 'todas') q = q.eq('estado', estado);
+  return comprobar(await q) as SolicitudCrm[];
+}
+
+export async function contarSolicitudesPendientes(): Promise<number> {
+  const r = await supabase.from('solicitudes_crm').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente');
+  // Si aún no se ha ejecutado la migración 05, la bandeja simplemente no aparece.
+  return r.error ? 0 : r.count ?? 0;
+}
+
+export async function obtenerSolicitud(id: string): Promise<SolicitudCrm | null> {
+  return comprobar(await supabase.from('solicitudes_crm').select('*').eq('id', id).maybeSingle()) as SolicitudCrm | null;
+}
+
+/** Cambia el estado de una solicitud; el expediente enlazado solo cambia si se indica. */
+export async function resolverSolicitud(id: string, estado: EstadoSolicitud, expedienteId?: string): Promise<void> {
+  comprobar(await supabase.from('solicitudes_crm').update({
+    estado, resuelta_en: estado === 'pendiente' ? null : new Date().toISOString(),
+    ...(expedienteId ? { expediente_id: expedienteId } : {}),
+  }).eq('id', id));
 }

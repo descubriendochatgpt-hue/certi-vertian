@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
-import { type DatosExpediente, actualizarExpediente, crearExpediente, obtenerExpediente } from '../lib/api';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { type DatosExpediente, actualizarExpediente, crearExpediente, obtenerExpediente, obtenerSolicitud, resolverSolicitud } from '../lib/api';
+import { type PropuestaExpediente, leerDatosCrm, propuestaDesdeCrm } from '../lib/solicitudesCrm';
 import { NOMBRE_TIPO_EDIFICIO, type TipoEdificio, esResidencial } from '../lib/estados';
 import {
   type Aviso, type Comprobacion, CONCEJOS_ASTURIAS, comprobarCodigoPostal, comprobarConcejo, comprobarEmail,
@@ -66,15 +67,41 @@ function avisosDe(f: Formulario, c: Comprobaciones): Aviso[] {
 
 const vacioANull = (s: string) => (s.trim() ? s.trim() : null);
 
+/** Campos que puede traer una solicitud del CRM, con su nombre para mostrar. */
+const CAMPOS_CRM: [keyof Formulario & keyof PropuestaExpediente, string][] = [
+  ['direccion', 'Dirección'], ['municipio', 'Municipio'], ['codigo_postal', 'Código postal'],
+  ['referencia_catastral', 'Referencia catastral'], ['tipo_edificio', 'Tipo de edificio'],
+  ['propietario_nombre', 'Propietario'], ['propietario_nif', 'NIF'], ['propietario_telefono', 'Teléfono'],
+  ['propietario_email', 'Email'], ['fecha_visita', 'Fecha de la visita'],
+];
+
 export function FormExpediente() {
   const { id } = useParams();
+  const [params] = useSearchParams();
+  const solicitudId = params.get('solicitud');
   const navegar = useNavigate();
+  const [propuesta, setPropuesta] = useState<PropuestaExpediente | null>(null);
   const [f, setF] = useState<Formulario>(VACIO);
   const [confirmados, setConfirmados] = useState<Set<string>>(new Set());
-  const [cargando, setCargando] = useState(Boolean(id));
+  const [cargando, setCargando] = useState(Boolean(id || solicitudId));
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
   const [mostrarAvisos, setMostrarAvisos] = useState(false);
+
+  // Solicitud del CRM: en un expediente nuevo rellena el formulario; en uno
+  // existente solo se muestran las diferencias para aplicarlas una a una.
+  useEffect(() => {
+    if (!solicitudId) return;
+    obtenerSolicitud(solicitudId).then((s) => {
+      if (!s) { setError('Solicitud no encontrada.'); return; }
+      const p = propuestaDesdeCrm(leerDatosCrm(s.datos));
+      setPropuesta(p);
+      if (!id) {
+        const { revisar: _r, ...campos } = p;
+        setF({ ...VACIO, ...campos });
+      }
+    }).catch((e: Error) => setError(e.message)).finally(() => { if (!id) setCargando(false); });
+  }, [id, solicitudId]);
 
   useEffect(() => {
     if (!id) return;
@@ -129,6 +156,13 @@ export function FormExpediente() {
     setEnviando(true);
     try {
       const guardado = id ? await actualizarExpediente(id, datos) : await crearExpediente(datos);
+      if (solicitudId) {
+        try {
+          await resolverSolicitud(solicitudId, 'importada', guardado.id);
+        } catch {
+          // El expediente ya está guardado; la solicitud se puede marcar después desde la bandeja.
+        }
+      }
       navegar(`/expedientes/${guardado.id}`);
     } catch (err) {
       setError((err as Error).message);
@@ -143,6 +177,17 @@ export function FormExpediente() {
     <main className="pagina">
       <p><Link to={id ? `/expedientes/${id}` : '/expedientes'}>← Volver</Link></p>
       <h1>{id ? 'Editar expediente' : 'Nuevo expediente'}</h1>
+
+      {propuesta && !id && (
+        <div className="caja info">
+          <strong>Datos de la solicitud del CRM.</strong> Revísalos antes de guardar: el expediente no se crea hasta que
+          pulses «Guardar».
+          {propuesta.revisar.length > 0 && <ul className="lista-simple">{propuesta.revisar.map((r) => <li key={r}>{r}</li>)}</ul>}
+        </div>
+      )}
+      {propuesta && id && !cargando && (
+        <CambiosCrm propuesta={propuesta} actual={f} onUsar={(k, v) => setF((x) => ({ ...x, [k]: v }))} />
+      )}
 
       <form onSubmit={guardar} className="formulario" noValidate>
         <fieldset>
@@ -191,5 +236,37 @@ export function FormExpediente() {
         </div>
       </form>
     </main>
+  );
+}
+
+/** Diferencias entre el expediente y lo que ha vuelto a mandar el CRM. Nada se cambia sin pulsar «Usar». */
+function CambiosCrm({ propuesta, actual, onUsar }: {
+  propuesta: PropuestaExpediente;
+  actual: Formulario;
+  onUsar: (k: keyof Formulario, v: string) => void;
+}) {
+  const cambios = CAMPOS_CRM.filter(([k]) => propuesta[k] && propuesta[k] !== actual[k]);
+  return (
+    <div className="caja aviso">
+      <strong>El cliente ha enviado datos nuevos desde el CRM.</strong>
+      {cambios.length === 0 ? <p>Coinciden con los del expediente.</p> : (
+        <div className="tabla-desplazable">
+          <table className="tabla">
+            <thead><tr><th>Dato</th><th>En el expediente</th><th>En el CRM</th><th /></tr></thead>
+            <tbody>
+              {cambios.map(([k, nombre]) => (
+                <tr key={k}>
+                  <td>{nombre}</td>
+                  <td>{String(actual[k] || '—')}</td>
+                  <td>{propuesta[k]}</td>
+                  <td><button type="button" onClick={() => onUsar(k, propuesta[k])}>Usar</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="suave">Al guardar, la solicitud se marca como revisada.</p>
+    </div>
   );
 }

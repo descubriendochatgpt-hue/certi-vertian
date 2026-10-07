@@ -304,3 +304,4 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
 .lista-propuesta > li > label > input { margin-top: 0.3rem; }
 .lista-propuesta .valores { margin: 0.25rem 0; padding-left: 1.1rem; font-size: 0.95rem; }
 .etiqueta.experimental { background: var(--aviso-fondo); color: var(--aviso); font-weight: 600; margin-left: 0.4rem; }
+.contador-menu { display: inline-block; min-width: 1.4em; margin-left: 0.3rem; padding: 0 0.35em; border-radius: 999px; background: #f0c419; color: #1d2b25; font-size: 0.8rem; font-weight: 700; text-align: center; }

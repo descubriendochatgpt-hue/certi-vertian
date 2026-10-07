@@ -13,6 +13,7 @@ import { Revision } from './paginas/Revision';
 import { Panel } from './paginas/Panel';
 import { Paquete } from './paginas/Paquete';
 import { FichaCe3x } from './paginas/FichaCe3x';
+import { Solicitudes } from './paginas/Solicitudes';
 
 export function App() {
   if (!configuracionCompleta) {
@@ -41,6 +42,7 @@ export function App() {
           <Route path="expedientes/:id/revision" element={<Revision />} />
           <Route path="expedientes/:id/paquete" element={<Paquete />} />
           <Route path="expedientes/:id/ficha-ce3x" element={<FichaCe3x />} />
+          <Route path="solicitudes" element={<Solicitudes />} />
           <Route path="aviso-legal" element={<AvisoLegal />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

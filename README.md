@@ -20,6 +20,7 @@ Herramienta web para organizar el trabajo de emisión de **certificados de efici
 | 4. Resultados (importación del PDF de CE3X), checklist previo a la firma y documentos | ✅ Hecho |
 | 5. Paquete de documentación para el registro de Asturias (sin envío) | ✅ Hecho |
 | 6. Panel (pendientes, visitas, vencimientos, estadísticas) y copia de seguridad completa | ✅ Hecho |
+| 7. Conexión con el CRM de Vertian: bandeja de solicitudes (inmueble y propietario desde la web) | ✅ Hecho |
 
 ## Cómo funciona (en una frase)
 
@@ -68,6 +69,8 @@ Necesitas:
    (resultados, checklist y almacén de documentos).
 6. Y con [`supabase/migrations/20260925090000_04_registro.sql`](supabase/migrations/20260925090000_04_registro.sql)
    (tipos de documento para el registro).
+7. Y con [`supabase/migrations/20261007090000_05_solicitudes_crm.sql`](supabase/migrations/20261007090000_05_solicitudes_crm.sql)
+   (bandeja de solicitudes que llegan del CRM; ver «Conexión con el CRM»).
 
 Ejecútalos **en ese orden** y **una sola vez** cada uno. Si ya tenías instalados algunos, ejecuta solo los que
 faltan.
@@ -171,6 +174,38 @@ Visita pendiente → Datos introducidos → Cálculo revisado → Certificado fi
 - Si algo no cuadra (letra que no corresponde a la escala del propio certificado, referencia catastral o fecha de
   visita distintas, certificado anterior a la visita, sin recomendaciones…) aparece un aviso que debes confirmar.
 - Al pulsar **Confirmar y pasar a «Cálculo revisado»** los resultados quedan congelados.
+
+## Conexión con el CRM (solicitudes de la web)
+
+Cuando un cliente pide un certificado en la web de Vertian y rellena los datos del inmueble, el **CRM** los envía
+aquí. Aparecen en **Solicitudes** (menú de arriba, con el número de pendientes):
+
+1. Pulsa **Crear expediente**: se abre el formulario de siempre ya relleno (dirección, municipio, código postal,
+   referencia catastral, tipo de edificio, propietario, NIF, teléfono, email y fecha de la visita si la reservó).
+   Arriba te dice qué revisar.
+2. Revisa y pulsa **Guardar**. Hasta entonces no se crea nada; la solicitud queda «con expediente».
+3. Después, en la toma de datos, completa el resto por **voz, texto o archivo** y genera el `.cex` desde la
+   **Ficha para CE3X**.
+
+Algunos datos no se copian a propósito:
+- La **superficie** que da el cliente es construida o aproximada. Va a las notas: la útil la mides tú.
+- Un tipo dudoso, como «Edificio completo», se deja para que lo elijas tú.
+- Si el inmueble no está en Asturias, se avisa.
+
+Si el cliente cambia datos o reserva la visita después, la solicitud vuelve a la bandeja con **Revisar los
+cambios**. Ahí ves lo que hay en el expediente al lado de lo nuevo y pulsas **Usar** en lo que quieras cambiar.
+
+**Puesta en marcha (una vez):** ejecuta la migración 05 (paso 2 de la instalación) y, en el SQL Editor:
+
+```sql
+select public.configurar_secreto_crm('UN-SECRETO-DE-32-CARACTERES-O-MAS');
+```
+
+Pon ese mismo secreto en el CRM, junto con la dirección y la clave **pública** de este Supabase. Los pasos están en
+el CRM, `docs/PEDIDOS_Y_WEB.md`, apartado «Conexión con CertiVertian».
+
+El CRM solo puede **dejar** solicitudes en la bandeja. No puede leer expedientes ni nada más. Aquí se guarda solo
+la huella del secreto, no el secreto.
 
 ## Rellenar por voz, texto o archivo
 
