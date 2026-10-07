@@ -298,3 +298,31 @@ export async function descartarEncargo(e: Pick<EncargoCrm, 'origen' | 'crm_id'>,
   if (descartar) comprobar(await supabase.from('encargos_descartados').insert({ origen: e.origen, crm_id: e.crm_id }));
   else comprobar(await supabase.from('encargos_descartados').delete().eq('origen', e.origen).eq('crm_id', e.crm_id));
 }
+
+// ─────────────────────────── Plantilla de CE3X ────────────────────────────
+// El proyecto .cex vacío del técnico (migración 06), guardado en base64.
+
+export interface PlantillaCex { nombre: string; version: string; subida_en: string; bytes: Uint8Array }
+
+const aBase64 = (b: Uint8Array) => {
+  let s = '';
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+const deBase64 = (t: string) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0));
+
+/** null si no hay plantilla guardada (o si aún no está la migración 06). */
+export async function obtenerPlantillaCex(): Promise<PlantillaCex | null> {
+  const r = await supabase.from('plantillas_cex').select('nombre, version, subida_en, contenido').maybeSingle();
+  if (r.error || !r.data) return null;
+  const d = r.data as { nombre: string; version: string; subida_en: string; contenido: string };
+  return { nombre: d.nombre, version: d.version, subida_en: d.subida_en, bytes: deBase64(d.contenido) };
+}
+
+export async function guardarPlantillaCex(nombre: string, version: string, bytes: Uint8Array): Promise<void> {
+  const { data } = await supabase.auth.getUser();
+  comprobar(await supabase.from('plantillas_cex').upsert({
+    tecnico_id: data.user?.id, nombre: nombre.slice(0, 200), version: version.slice(0, 100),
+    contenido: aBase64(bytes), subida_en: new Date().toISOString(),
+  }));
+}

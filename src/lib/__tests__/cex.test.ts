@@ -108,7 +108,31 @@ describe('rellenar una plantilla .cex', () => {
     expect(calc).toBe(true);
     expect(texto(huella)).toBe('huella'); // la huella de CE3X no se toca
     expect(r.pendientes.join(' | ')).toMatch(/Cerramientos opacos: 1/);
-    expect(r.avisos).toEqual([]);
+    expect(r.avisos).toEqual([expect.stringMatching(/datos del cliente/)]);
+  });
+
+  it('pantallas 1 y 2 completas: edificio, cliente y datos generales en su sitio', () => {
+    const toma = tomaDatosVacia();
+    toma.generales = {
+      nombreEdificio: 'Residencial Ejemplo', gradoProteccion: 'ninguna', usoEdificio: 'residencial_privado',
+      clienteDireccion: 'C/ Cliente 2', clienteLocalidad: 'Gijón', clienteCodigoPostal: '33201',
+      superficieUtilRd390: 77, superficieUtil: 58.7, numeroViviendas: 1, numeroPlantas: 1, plantasSobreRasante: 6,
+      plantasBajoRasante: 0, demandaAcs: 86, anioConstruccion: 1990,
+    };
+    const e = { ...exp, codigo_postal: '33003', propietario_nombre: 'Ana Pérez', propietario_telefono: '600000001', propietario_email: 'ana@ejemplo.es' } as Expediente;
+    const r = rellenarPlantilla(plantilla(), e, toma);
+    const [, admin, gen] = leerPickles(escribirPickles(r.proyecto.bloques)) as Py[][];
+    // Edificio
+    expect([admin![0], admin![14], admin![26], admin![28]]).toEqual(['Residencial Ejemplo', '33003', 'Ninguna', new PyBytes('ResidencialPrivado')]);
+    // Cliente (la provincia sale del código postal)
+    expect([admin![5], admin![7], admin![16], admin![17], admin![18], admin![8], admin![9]])
+      .toEqual(['Ana Pérez', 'C/ Cliente 2', 'Gijón', 'Asturias', '33201', '600000001', 'ana@ejemplo.es']);
+    // Datos generales; el año del expediente manda sobre el de la toma
+    expect([gen![22], gen![6], gen![23], gen![8], gen![25], gen![24], gen![9], gen![19]])
+      .toEqual(['77', '58.7', '1', '1', '6', '0', '86', '1972']);
+    // Lo que CE3X trae por defecto no se toca si no se tomó otro valor
+    expect([gen![7], gen![16], gen![10]]).toEqual(['', '0.63', 'Media']);
+    expect(r.pendientes).not.toContain('Grado de protección (elígelo en CE3X)');
   });
 
   it('lo que no se sabe colocar queda pendiente, no se inventa', () => {

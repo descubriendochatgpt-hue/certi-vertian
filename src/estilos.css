@@ -305,3 +305,16 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
 .lista-propuesta .valores { margin: 0.25rem 0; padding-left: 1.1rem; font-size: 0.95rem; }
 .etiqueta.experimental { background: var(--aviso-fondo); color: var(--aviso); font-weight: 600; margin-left: 0.4rem; }
 .contador-menu { display: inline-block; min-width: 1.4em; margin-left: 0.3rem; padding: 0 0.35em; border-radius: 999px; background: #f0c419; color: #1d2b25; font-size: 0.8rem; font-weight: 700; text-align: center; }
+
+/* Asistente por voz y fichero para CE3X */
+.asistente h2, .generar-cex h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
+.asistente.activo { border-color: var(--verde); }
+.pantallas-ce3x { display: flex; flex-wrap: wrap; gap: 0.3rem; list-style: none; padding: 0; margin: 0 0 0.75rem; font-size: 0.8rem; }
+.pantallas-ce3x li { padding: 0.15rem 0.5rem; border-radius: 999px; border: 1px solid var(--borde); color: var(--suave); }
+.pantallas-ce3x li.actual { background: var(--verde); border-color: var(--verde); color: #fff; font-weight: 600; }
+.pregunta-asistente { font-size: 1.2rem; font-weight: 600; margin: 0.25rem 0 0.5rem; }
+.estado-asistente { color: var(--suave); min-height: 1.4em; margin: 0 0 0.5rem; }
+.fila-respuesta { display: flex; gap: 0.5rem; }
+.fila-respuesta input { flex: 1; min-width: 0; }
+.apuntes { margin-top: 0.5rem; font-size: 0.9rem; }
+.generar-cex .titulo-con-accion h2 { margin: 0; }

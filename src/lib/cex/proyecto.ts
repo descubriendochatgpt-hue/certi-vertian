@@ -18,7 +18,8 @@
 
 import { type Py, PyBytes, escribirPickles, leerPickles, texto } from './pickle';
 import type { Expediente } from '../estados';
-import type { TomaDatos } from '../tomaDatos';
+import type { TomaDatos, Valor } from '../tomaDatos';
+import { provinciaDeCodigoPostal } from '../encargosCrm';
 
 export interface ProyectoCex {
   version: string;
@@ -108,21 +109,38 @@ export function rellenarPlantilla(plantilla: Uint8Array, exp: Expediente, toma: 
     rellenados.push({ etiqueta, antes, valor });
   };
 
-  // Datos administrativos (bloque 1)
-  poner(admin, 0, 'Nombre del edificio', exp.direccion);
+  const g = toma.generales;
+  const txt = (v: Valor | undefined) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+  const nume = (v: Valor | undefined) => (typeof v === 'number' ? num(v) : undefined);
+  const provinciaCliente = txt(g.clienteProvincia) ?? provinciaDeCodigoPostal(String(g.clienteCodigoPostal ?? '')) ?? undefined;
+
+  // ── Pantalla 1 · Datos administrativos (bloque 1) ──
+  // Edificio
+  poner(admin, 0, 'Nombre del edificio', txt(g.nombreEdificio) ?? exp.direccion);
   poner(admin, 1, 'Dirección', exp.direccion);
-  poner(admin, 2, 'Municipio', exp.municipio);
   poner(admin, 3, 'Provincia', exp.provincia);
+  poner(admin, 2, 'Localidad', exp.municipio);
+  poner(admin, 14, 'Código postal', exp.codigo_postal);
   if (exp.referencia_catastral && Array.isArray(admin[15])) {
     const rc = admin[15] as Py[];
     const antes = rc.map((x) => texto(x) ?? '').join(', ');
     rc.splice(0, rc.length, exp.referencia_catastral);
     rellenados.push({ etiqueta: 'Referencia catastral', antes, valor: exp.referencia_catastral });
   } else pendientes.push('Referencia catastral');
-  pendientes.push('Código postal del edificio', 'Datos del cliente (nombre, NIF, teléfono, email)');
+  if (g.gradoProteccion === 'ninguna') poner(admin, 26, 'Grado de protección', 'Ninguna');
+  else pendientes.push('Grado de protección (elígelo en CE3X)');
+  if (g.usoEdificio === 'residencial_privado') poner(admin, 28, 'Uso del edificio', 'ResidencialPrivado');
+  else pendientes.push('Uso del edificio (elígelo en CE3X)');
+  // Cliente (los datos del técnico se quedan los de la plantilla)
+  poner(admin, 5, 'Cliente: nombre o razón social', exp.propietario_nombre);
+  poner(admin, 7, 'Cliente: dirección', txt(g.clienteDireccion));
+  poner(admin, 17, 'Cliente: provincia', provinciaCliente);
+  poner(admin, 16, 'Cliente: localidad', txt(g.clienteLocalidad));
+  poner(admin, 18, 'Cliente: código postal', txt(g.clienteCodigoPostal));
+  poner(admin, 8, 'Cliente: teléfono', exp.propietario_telefono);
+  poner(admin, 9, 'Cliente: email', exp.propietario_email);
 
-  // Datos generales (bloque 2)
-  const g = toma.generales;
+  // ── Pantalla 2 · Datos generales (bloque 2) ──
   const NORMATIVA: Record<string, string> = { anterior_ct79: 'Anterior' };
   const normativa = typeof g.normativa === 'string' ? NORMATIVA[g.normativa] : undefined;
   if (g.normativa && !normativa) pendientes.push('Normativa vigente (elígela en CE3X)');
@@ -131,17 +149,23 @@ export function rellenarPlantilla(plantilla: Uint8Array, exp: Expediente, toma: 
   const tipo = TIPO[exp.tipo_edificio];
   if (tipo) poner(gen, 1, 'Tipo de edificio', tipo); else pendientes.push('Tipo de edificio (elígelo en CE3X)');
   poner(gen, 2, 'Provincia (datos generales)', exp.provincia);
-  poner(gen, 3, 'Localidad', exp.municipio);
+  poner(gen, 3, 'Localidad (datos generales)', exp.municipio);
+  poner(gen, 19, 'Año de construcción', exp.anio_construccion ? String(exp.anio_construccion) : nume(g.anioConstruccion));
   const zona = typeof g.zonaClimatica === 'string' && g.zonaClimatica !== 'otra' ? g.zonaClimatica : undefined;
   poner(gen, 4, 'Zona climática', zona);
-  poner(gen, 6, 'Superficie útil habitable (m²)', typeof g.superficieUtil === 'number' ? num(g.superficieUtil) : undefined);
-  poner(gen, 7, 'Altura libre de planta (m)', typeof g.alturaLibre === 'number' ? num(g.alturaLibre) : undefined);
-  poner(gen, 8, 'Número de plantas habitables', typeof g.numeroPlantas === 'number' ? num(g.numeroPlantas) : undefined);
-  poner(gen, 9, 'Demanda diaria de ACS (l/día)', typeof g.demandaAcs === 'number' ? num(g.demandaAcs) : undefined);
-  const masa = typeof g.masaParticiones === 'string' ? g.masaParticiones.charAt(0).toUpperCase() + g.masaParticiones.slice(1) : undefined;
-  poner(gen, 10, 'Masa de las particiones', masa);
-  poner(gen, 16, 'Ventilación (ren/h)', typeof g.ventilacion === 'number' ? num(g.ventilacion) : undefined);
-  poner(gen, 19, 'Año de construcción', exp.anio_construccion ? String(exp.anio_construccion) : undefined);
+  poner(gen, 22, 'Superficie útil RD 390/2021 (m²)', nume(g.superficieUtilRd390));
+  poner(gen, 6, 'Superficie cálculo CTE DB-HE (m²)', nume(g.superficieUtil));
+  poner(gen, 23, 'Nº viviendas / unidades de uso', nume(g.numeroViviendas));
+  poner(gen, 8, 'Número de plantas habitables', nume(g.numeroPlantas));
+  poner(gen, 25, 'Número de plantas sobre rasante', nume(g.plantasSobreRasante));
+  poner(gen, 24, 'Número de plantas bajo rasante', nume(g.plantasBajoRasante));
+  poner(gen, 9, 'Demanda diaria de ACS (l/día)', nume(g.demandaAcs));
+  // Valores por defecto de CE3X: solo se cambian si en la visita se tomó otro valor
+  if (typeof g.alturaLibre === 'number') poner(gen, 7, 'Altura libre de planta (m)', num(g.alturaLibre));
+  if (typeof g.ventilacion === 'number') poner(gen, 16, 'Ventilación (ren/h)', num(g.ventilacion));
+  if (typeof g.masaParticiones === 'string') poner(gen, 10, 'Masa de las particiones', g.masaParticiones.charAt(0).toUpperCase() + g.masaParticiones.slice(1));
+
+  avisos.push('Las posiciones de los datos del cliente se han deducido de un proyecto en el que cliente y técnico tenían los mismos datos: comprueba en CE3X la pantalla «Datos administrativos».');
 
   // Lo que todavía no se escribe en el .cex
   const cuenta = (k: keyof TomaDatos, nombre: string) => {
