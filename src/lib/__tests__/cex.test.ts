@@ -41,6 +41,22 @@ describe('pickle de Python 2 (protocolo 0)', () => {
     expect(otra).toEqual(original);
   });
 
+  it('reescribe el fichero de CE3X exactamente igual, byte a byte', () => {
+    expect(escribirPickles(leerPickles(fixture))).toEqual(fixture);
+  });
+
+  it('como Python: un texto repetido es una referencia solo si era el mismo objeto', () => {
+    // «x» dos veces como textos distintos y luego una referencia al primero
+    const t = "(lp0\nVx\np1\naVx\np2\nag1\na.";
+    const [l] = leerPickles(t) as Py[][];
+    expect(escribirPickle(l!)).toBe(t);
+    // Si se cambia una posición, ese valor se escribe como texto nuevo y el resto sigue igual
+    l![2] = 'y';
+    expect(escribirPickle(l!)).toBe("(lp0\nVx\np1\naVx\np2\naVy\np3\na.");
+    l![0] = 'z';
+    expect(escribirPickle(l!)).toBe("(lp0\nVz\np1\naVx\np2\naVy\np3\na.");
+  });
+
   it('escribe como Python 2: CRLF, cadenas, reales y referencias', () => {
     const compartida: Py[] = ['x'];
     const v: Py = [new PyBytes("it's"), 'Partición\\\n', new PyFloat(100), new PyFloat(0.1), 7, true, null,
@@ -114,7 +130,7 @@ describe('rellenar una plantilla .cex', () => {
     ]));
     expect(calc).toBe(true);
     expect(texto(huella)).toBe('huella'); // la huella de CE3X no se toca
-    expect(r.pendientes.join(' | ')).toMatch(/Cerramientos opacos: 1/);
+    expect(r.pendientes.join(' | ')).toMatch(/Cerramiento «Fachada 1»: no hay en el catálogo/);
     expect(r.avisos).toEqual([expect.stringMatching(/datos del cliente/)]);
   });
 

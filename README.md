@@ -78,6 +78,8 @@ avisa sin cambiar nada.
    (lectura de los encargos de certificado del CRM; ver «Conexión con el CRM»).
 8. Y con [`supabase/migrations/20261008090000_06_plantilla_cex.sql`](supabase/migrations/20261008090000_06_plantilla_cex.sql)
    (tu plantilla de CE3X guardada y la dirección del cliente desde el CRM).
+9. Y con [`supabase/migrations/20261009090000_07_visitas_catalogo.sql`](supabase/migrations/20261009090000_07_visitas_catalogo.sql)
+   (visitas grabadas y catálogo de soluciones de CE3X).
 
 Ejecútalos **en ese orden** y **una sola vez** cada uno. Si ya tenías instalados algunos, ejecuta solo los que
 faltan.
@@ -147,6 +149,19 @@ servidor ni claves secretas). Va incluido en el plan Workers que ya pagas para e
    *Deployments → … → Retry deployment* (o haz cualquier cambio en `main`).
 5. **Tu dirección:** *Settings → Domains & Routes → Add → Custom domain* → `certi.vertiansolutions.es`. En unos
    minutos funcionará con candado (HTTPS).
+
+6. **Secretos para la visita grabada** (Cloudflare → Workers & Pages → certi-vertian → *Settings → Variables and
+   Secrets* → *Add*, tipo **Secret**; son de **ejecución**, distintos de los del punto 3):
+
+   | Nombre | Valor |
+   |---|---|
+   | `ANTHROPIC_API_KEY` | una clave de <https://console.anthropic.com> → *API Keys* → *Create Key* (`sk-ant-…`). Puede ser de la misma cuenta que la del chat del CRM: Cloudflare no deja leer la del CRM, así que crea otra para CertiVertian. |
+   | `SUPABASE_URL` | la misma *Project URL* del paso 5 |
+   | `SUPABASE_CLAVE_PUBLICA` | la misma clave pública del paso 5 |
+
+   El Worker los usa para comprobar que quien pide procesar una visita es un técnico con doble factor, y para llamar a
+   Claude. La transcripción del audio usa **Workers AI** de Cloudflare, que ya viene activado con la cuenta (no
+   necesita clave). Opcional: `ANTHROPIC_MODEL` para usar otro modelo (por defecto `claude-opus-5-5`).
 
 Las cabeceras de seguridad (las que limitan con quién puede hablar la página) están en `public/_headers` y las
 aplica Cloudflare solo. Cada cambio en `main` se publica automáticamente.
@@ -254,6 +269,36 @@ expediente al lado de lo que hay ahora en el CRM. Pulsa **Usar** en lo que quier
 - Solo lo ven las cuentas autorizadas en `tecnicos`, con la verificación en dos pasos.
 - Si en el CRM se borran los datos de un cliente (derecho de supresión), el expediente se conserva sin el enlace.
 
+## Grabar la visita (voz y fotos)
+
+La forma recomendada de tomar datos: **sin bolígrafo ni libreta, y sin que el móvil te pregunte nada**.
+
+1. **En el inmueble**, en la ficha del expediente o en la toma de datos: **🎙 Grabar la visita**.
+   - Pulsa **● Grabar** y ve contando lo que ves, en el orden que quieras: «fachada norte de ladrillo, cámara sin
+     aislar, doce metros por dos sesenta… ventana del salón de aluminio sin rotura, doble vidrio, persiana, uno
+     cuarenta de ancho por uno veinte de alto… termo eléctrico de 80 litros, 2,5 kW». Puedes corregirte («no,
+     perdón, son catorce metros»).
+   - **📷 Foto**: placas de la caldera o el termo, ventanas, fachadas, contador… La IA lee las placas (marca, modelo,
+     potencia, año).
+   - **📄 PDF**: si tienes la consulta descriptiva y gráfica del Catastro en PDF, adjúntala y se sacan de ella el año,
+     la superficie construida y el uso.
+   - **Funciona sin cobertura**: el audio se guarda en el móvil por tramos de 2 minutos y cada foto al momento. Si se
+     cierra la página, no se pierde lo grabado. Deja la pantalla encendida mientras grabas.
+2. **Procesar la visita** (cuando haya conexión, en el mismo móvil):
+   - el audio se pasa a texto con Whisper en Cloudflare (Workers AI);
+   - Claude lee la transcripción, las fotos y los PDF y propone los datos para la toma de datos, cada uno con la frase
+     de la que sale; lo dudoso lo pone en «Dudas que conviene revisar» en lugar de inventarlo;
+   - también redacta el texto de «pruebas, comprobaciones e inspecciones realizadas» del informe de CE3X.
+
+   Después te ofrece borrar el audio y las fotos del móvil. En el servidor solo queda la transcripción y la
+   propuesta, nunca el audio ni las fotos. Cuesta unos céntimos por visita en la cuenta de Anthropic.
+3. **En la oficina**, en la toma de datos, **Visitas grabadas**: revisas la propuesta, desmarcas lo que no quieras y
+   **Añadir a la toma de datos**. Lo añadido pasa por las comprobaciones de siempre. Luego **⬇ Generar .cex**.
+
+**Datos del Catastro:** en la toma de datos, el apartado *Datos del Catastro* consulta la referencia catastral del
+expediente en el servicio público de la Sede Electrónica del Catastro (año, superficie construida, uso, planta) y
+te deja usar el año o añadir el resto a las observaciones. Si el Catastro no responde, adjunta su PDF en la visita.
+
 ## Asistente por voz para CE3X
 
 En la toma de datos, **🎙 Empezar el asistente** te guía por las cuatro pantallas de CE3X, en su orden:
@@ -300,9 +345,22 @@ Arriba de la toma de datos está **Fichero para CE3X → ⬇ Generar .cex**.
   coincide exactamente con una de sus opciones, CE3X se cuelga al abrir el fichero.
   - La **localidad** la eliges tú en CE3X (pantallas 1 y 2), y al hacerlo CE3X asigna la zona climática.
   - Lo demás que no esté comprobado sale en la lista de pendientes con el texto exacto que hay que elegir.
-- **Envolvente e instalaciones todavía no** se escriben en el .cex: se introducen en CE3X con la «Ficha para
-  CE3X». CE3X guarda con cada elemento valores que calcula él mismo, y hace falta un proyecto de prueba de cada tipo
-  para escribirlos sin riesgo.
+- **Envolvente e instalaciones** se escriben copiando **soluciones de un proyecto real de CE3X** (ver el
+  catálogo, abajo): fachadas, particiones, ventanas, puentes térmicos y equipos. En la copia solo cambian el
+  nombre, las medidas, la orientación y la potencia. Lo que no encaja con ninguna solución del catálogo queda en
+  pendientes para introducirlo en CE3X con la «Ficha para CE3X».
+  - Los **puentes térmicos** se generan como los genera CE3X por defecto: pilares, esquina y forjado de cada
+    fachada (necesita largo y alto), contorno de cada hueco y caja de persiana.
+  - En los **huecos**, abre cada uno en CE3X, asigna el patrón de sombras si lo hay y pulsa «Modificar» para que
+    recalcule los factores solares.
+- **Catálogo de soluciones de CE3X** (dentro de «Fichero para CE3X»): trae de serie las del proyecto de ejemplo
+  (fachada estimada de doble hoja, fachada con composición, partición interior por defecto, ventana metálica sin
+  RPT con doble vidrio, termo y radiadores eléctricos). **Sube tus proyectos .cex terminados** para que aprenda
+  los tuyos (calderas, bombas de calor, PVC, cubiertas…): de cada proyecto solo se guardan la envolvente y las
+  instalaciones, nunca los datos del cliente. En cada cerramiento, hueco o instalación de la toma de datos puedes
+  elegir la solución en **Solución de CE3X**; si la dejas vacía se usa la única que encaje (por tipo y U, por marco
+  y vidrio, o por servicio, generador y combustible). Las orientaciones solo se escriben si ya han aparecido en
+  algún proyecto del catálogo.
 
 
 En la toma de datos, el apartado **Rellenar por voz, texto o archivo** ahorra teclear campo a campo:
@@ -345,14 +403,15 @@ En la misma ficha, **Generar el proyecto .cex** crea un fichero que se abre en C
    que completar en CE3X. Pulsa **Descargar** y ábrelo en CE3X.
 3. Revisa todas las pantallas y **califica en CE3X**: el cálculo y la comprobación siguen siendo tuyos.
 
-Por ahora **no** escribe cerramientos, huecos, puentes térmicos ni instalaciones: CE3X guarda con ellos valores que
-calcula él mismo (U de la composición, factores de sombra…) y no se van a imitar. La app rechaza una plantilla que
-ya tenga elementos, para no arrastrar los de otro edificio. Solo se ha comprobado con **CE3X v3.1 Residencial**.
+La envolvente y las instalaciones se copian del catálogo de soluciones (ver «Generar el .cex desde la toma de
+datos»). La app rechaza una plantilla que ya tenga elementos, para no arrastrar los de otro edificio. Solo se ha
+comprobado con **CE3X v3.1 Residencial**.
 
 Cómo es el formato (para desarrolladores): un `.cex` es una sucesión de *pickles* de Python 2 (protocolo 0) con
 saltos de línea CRLF. `src/lib/cex/pickle.ts` los lee y escribe sin ejecutar nada, conservando la diferencia entre
-`str` y `unicode`, enteros y reales; se ha comprobado que lee un proyecto real y lo vuelve a escribir con el mismo
-contenido. El último bloque es una huella del propio CE3X que la app no toca ni recalcula.
+`str` y `unicode`, enteros y reales, y qué textos eran el mismo objeto (Python solo escribe una referencia «gN»
+cuando es el mismo objeto): un proyecto real se vuelve a escribir **idéntico byte a byte**. El último bloque es una
+huella del propio CE3X que la app no toca ni recalcula.
 
 ## Checklist previo a la firma
 
@@ -432,6 +491,11 @@ Tú eres el **responsable del tratamiento** de los datos de propietarios y promo
 - Contraseña larga y única, y verificación en dos pasos (la app la exige).
 - Si usas un ordenador o móvil compartido, pulsa **Salir** al terminar: se borran las copias locales de los
   borradores.
+- **Visita grabada:** al procesarla, el audio va a **Cloudflare (Workers AI)** para pasarlo a texto, y el texto, las
+  fotos y los PDF a **Anthropic (Claude)** para interpretarlos. Son encargados del tratamiento: acepta sus DPA
+  (Cloudflare ya lo tienes por el CRM; Anthropic: condiciones comerciales y DPA en su consola) y añádelos al registro
+  de actividades. No grabes nombres, DNI ni teléfonos y evita fotos con personas o documentos personales. El audio y
+  las fotos se quedan en el móvil hasta que los borras; en Supabase solo se guarda la transcripción y la propuesta.
 
 ---
 
@@ -460,6 +524,8 @@ src/
   lib/            validaciones, estados, modelo de la toma de datos, acceso a datos
   componentes/    campos de formulario, sesión, marco de la app
   paginas/        pantallas
+  lib/cex/        lectura y escritura del .cex de CE3X y catálogo de soluciones
+worker/           /api del Worker: transcripción (Workers AI), Claude y Catastro
 supabase/
   migrations/     esquema y seguridad (RLS) — se ejecutan en el SQL Editor
   tests/          pruebas SQL del flujo de estados y de la seguridad
@@ -470,7 +536,8 @@ public/_headers   cabeceras de seguridad
 Principios del diseño:
 
 - **Toda la seguridad está en la base de datos** (RLS): sesión + verificación en dos pasos (`aal2`) + cuenta en
-  `tecnicos` + titularidad de la fila. La web no tiene servidor propio ni clave de servicio.
+  `tecnicos` + titularidad de la fila. La web no tiene servidor propio ni clave de servicio. El Worker de `/api`
+  no lee ni escribe datos: solo pregunta a Supabase, con el token del técnico, si es un técnico verificado.
 - **El estado solo cambia con `cambiar_estado()`**, que avanza o retrocede un paso y lo anota en el historial. Un
   `UPDATE` directo del estado, la firma o el registro se rechaza.
 - **Los PDF se leen en el navegador** (`src/lib/certificadoPdf.ts`, probado con CE3X v2.3). Lo leído es una

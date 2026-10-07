@@ -69,6 +69,30 @@ export function texto(v: Py | undefined): string | undefined {
 
 // ───────────────────────────────── Lectura ─────────────────────────────────
 
+/**
+ * Identidad de las cadenas unicode. En JavaScript dos textos iguales son
+ * indistinguibles, pero pickle (como Python) escribe una referencia («g5»)
+ * solo cuando es EL MISMO objeto y un texto nuevo cuando es otro objeto con el
+ * mismo contenido. Para reescribir un .cex exactamente como lo escribió CE3X,
+ * al leer se anota de qué texto del fichero viene cada posición de cada lista,
+ * tupla o diccionario; al escribir, se reutiliza la referencia solo si la
+ * posición sigue teniendo ese mismo texto.
+ */
+const identidades = new WeakMap<object, Map<string, { token: number; valor: string }>>();
+let contadorTokens = 0;
+
+function anotar(contenedor: object, posicion: string, valor: Py, token: number | undefined) {
+  if (token === undefined || typeof valor !== 'string') return;
+  let m = identidades.get(contenedor);
+  if (!m) identidades.set(contenedor, (m = new Map()));
+  m.set(posicion, { token, valor });
+}
+
+function tokenDe(contenedor: object, posicion: string, valor: Py): number | undefined {
+  const e = identidades.get(contenedor)?.get(posicion);
+  return e && e.valor === valor ? e.token : undefined;
+}
+
 const MARCA = Symbol('marca');
 type Pila = (Py | typeof MARCA)[];
 
@@ -148,14 +172,21 @@ export function leerPickles(datos: Uint8Array | string): Py[] {
   while (i < s.length) {
     if (s[i] === '\n' || s[i] === '\r') { i++; continue; }
     const pila: Pila = [];
+    const tokens: (number | undefined)[] = []; // en paralelo a la pila: de qué texto del fichero viene cada cadena
     const memo = new Map<string, Py>();
+    const memoTokens = new Map<string, number | undefined>();
+    let ultimos: (number | undefined)[] = [];
     const hastaMarca = (): Py[] => {
       const k = pila.lastIndexOf(MARCA);
       if (k < 0) throw new Error('Pickle mal formado: falta una marca.');
       const items = pila.splice(k) as Py[];
       items.shift();
+      ultimos = tokens.splice(k).slice(1);
       return items;
     };
+    const meter = (v: Py | typeof MARCA, token?: number) => { pila.push(v); tokens.push(token); };
+    const sacar = (): [Py, number | undefined] => [pila.pop() as Py, tokens.pop()];
+    const anotarTodos = (c: object, items: Py[], desde = 0) => items.forEach((v, j) => anotar(c, String(desde + j), v, ultimos[j]));
     const cima = (): Py => {
       const v = pila[pila.length - 1];
       if (v === undefined || v === MARCA) throw new Error('Pickle mal formado: pila vacía.');
@@ -166,37 +197,42 @@ export function leerPickles(datos: Uint8Array | string): Py[] {
       if (i >= s.length) throw new Error('Fin de fichero inesperado dentro del pickle.');
       const op = s[i++]!;
       switch (op) {
-        case '(': pila.push(MARCA); break;
-        case '.': resultado.push(pila.pop() as Py); terminado = true; break;
-        case '0': pila.pop(); break;
-        case 'N': pila.push(null); break;
+        case '(': meter(MARCA); break;
+        case '.': resultado.push(sacar()[0]); terminado = true; break;
+        case '0': sacar(); break;
+        case 'N': meter(null); break;
         case 'I': {
           const l = linea();
-          if (l === '01') pila.push(true);
-          else if (l === '00') pila.push(false);
-          else pila.push(Number(l));
+          if (l === '01') meter(true);
+          else if (l === '00') meter(false);
+          else meter(Number(l));
           break;
         }
-        case 'L': pila.push(new PyLong(BigInt(linea().replace(/L$/, '')))); break;
-        case 'F': pila.push(new PyFloat(Number(linea()))); break;
-        case 'S': pila.push(new PyBytes(leerLiteral(linea()))); break;
-        case 'V': pila.push(leerRawUnicode(linea())); break;
-        case 'l': pila.push(hastaMarca()); break;
+        case 'L': meter(new PyLong(BigInt(linea().replace(/L$/, '')))); break;
+        case 'F': meter(new PyFloat(Number(linea()))); break;
+        case 'S': meter(new PyBytes(leerLiteral(linea()))); break;
+        case 'V': meter(leerRawUnicode(linea()), ++contadorTokens); break;
+        case 'l': { const items = hastaMarca(); anotarTodos(items, items); meter(items); break; }
         case 'd': {
           const items = hastaMarca();
           const d = new PyDict();
-          for (let k = 0; k < items.length; k += 2) d.entries.push([items[k]!, items[k + 1]!]);
-          pila.push(d);
+          for (let k = 0; k < items.length; k += 2) {
+            anotar(d, `k${d.entries.length}`, items[k]!, ultimos[k]);
+            anotar(d, `v${d.entries.length}`, items[k + 1]!, ultimos[k + 1]);
+            d.entries.push([items[k]!, items[k + 1]!]);
+          }
+          meter(d);
           break;
         }
-        case 't': pila.push(new PyTuple(hastaMarca())); break;
-        case ')': pila.push(new PyTuple([])); break;
-        case ']': pila.push([]); break;
-        case '}': pila.push(new PyDict()); break;
+        case 't': { const items = hastaMarca(); anotarTodos(items, items); meter(new PyTuple(items)); break; }
+        case ')': meter(new PyTuple([])); break;
+        case ']': meter([]); break;
+        case '}': meter(new PyDict()); break;
         case 'a': {
-          const v = pila.pop() as Py;
+          const [v, t] = sacar();
           const lista = cima();
           if (!Array.isArray(lista)) throw new Error('Pickle mal formado: APPEND sin lista.');
+          anotar(lista, String(lista.length), v, t);
           lista.push(v);
           break;
         }
@@ -204,13 +240,16 @@ export function leerPickles(datos: Uint8Array | string): Py[] {
           const items = hastaMarca();
           const lista = cima();
           if (!Array.isArray(lista)) throw new Error('Pickle mal formado: APPENDS sin lista.');
+          anotarTodos(lista, items, lista.length);
           lista.push(...items);
           break;
         }
         case 's': {
-          const v = pila.pop() as Py, k = pila.pop() as Py;
+          const [v, tv] = sacar(), [k, tk] = sacar();
           const d = cima();
           if (!(d instanceof PyDict)) throw new Error('Pickle mal formado: SETITEM sin diccionario.');
+          anotar(d, `k${d.entries.length}`, k, tk);
+          anotar(d, `v${d.entries.length}`, v, tv);
           d.entries.push([k, v]);
           break;
         }
@@ -218,30 +257,36 @@ export function leerPickles(datos: Uint8Array | string): Py[] {
           const items = hastaMarca();
           const d = cima();
           if (!(d instanceof PyDict)) throw new Error('Pickle mal formado: SETITEMS sin diccionario.');
-          for (let k = 0; k < items.length; k += 2) d.entries.push([items[k]!, items[k + 1]!]);
+          for (let k = 0; k < items.length; k += 2) {
+            anotar(d, `k${d.entries.length}`, items[k]!, ultimos[k]);
+            anotar(d, `v${d.entries.length}`, items[k + 1]!, ultimos[k + 1]);
+            d.entries.push([items[k]!, items[k + 1]!]);
+          }
           break;
         }
-        case 'p': memo.set(linea(), cima()); break;
+        case 'p': { const k = linea(); memo.set(k, cima()); memoTokens.set(k, tokens[tokens.length - 1]); break; }
         case 'g': {
           const k = linea();
           if (!memo.has(k)) throw new Error(`Pickle mal formado: referencia ${k} desconocida.`);
-          pila.push(memo.get(k)!);
+          meter(memo.get(k)!, memoTokens.get(k));
           break;
         }
-        case 'c': { const m = linea(); pila.push(new PyGlobal(m, linea())); break; }
+        case 'c': { const m = linea(); meter(new PyGlobal(m, linea())); break; }
         case 'i': {
           const m = linea(), n = linea();
-          pila.push(new PyObject('inst', new PyGlobal(m, n), hastaMarca()));
+          const args = hastaMarca();
+          anotarTodos(args, args);
+          meter(new PyObject('inst', new PyGlobal(m, n), args));
           break;
         }
         case 'R': {
-          const args = pila.pop() as Py, f = pila.pop() as Py;
+          const [args] = sacar(), [f] = sacar();
           if (!(f instanceof PyGlobal) || !(args instanceof PyTuple)) throw new Error('Pickle mal formado: REDUCE.');
-          pila.push(new PyObject('reduce', f, args.items));
+          meter(new PyObject('reduce', f, args.items));
           break;
         }
         case 'b': {
-          const estado = pila.pop() as Py;
+          const [estado] = sacar();
           const o = cima();
           if (!(o instanceof PyObject)) throw new Error('Pickle mal formado: BUILD sin objeto.');
           o.state = estado;
@@ -303,17 +348,19 @@ function reprFloat(v: number): string {
 
 /**
  * Escribe un valor como un pickle de protocolo 0, igual que lo haría
- * `pickle.dump(valor, f)` en Python 2. Las cadenas iguales se escriben una vez
- * y después se referencian (como hace Python con los objetos repetidos).
+ * `pickle.dump(valor, f)` en Python 2: lo que ya se ha escrito (el MISMO
+ * objeto) se referencia; un texto leído de un fichero se referencia solo si en
+ * el fichero era el mismo objeto (ver «identidades»).
  */
 export function escribirPickle(valor: Py): string {
   const partes: string[] = [];
   const memoObj = new Map<object, number>();
-  const memoTexto = new Map<string, number>();
+  const memoTokens = new Map<number, number>();
   let n = 0;
   const poner = (): number => { partes.push(`p${n}\n`); return n++; };
 
-  const escribir = (v: Py): void => {
+  /** `contenedor` y `posicion`: dónde está el valor (para saber de qué texto del fichero venía). */
+  const escribir = (v: Py, contenedor?: object, posicion?: string): void => {
     if (v === null) { partes.push('N'); return; }
     if (typeof v === 'boolean') { partes.push(v ? 'I01\n' : 'I00\n'); return; }
     if (typeof v === 'number') {
@@ -323,31 +370,37 @@ export function escribirPickle(valor: Py): string {
     }
     if (v instanceof PyFloat) { partes.push(`F${reprFloat(v.v)}\n`); return; }
     if (v instanceof PyLong) { partes.push(`L${v.v}L\n`); return; }
-    if (typeof v === 'string' || v instanceof PyBytes) {
-      const clave = typeof v === 'string' ? `V${v}` : `S${v.s}`;
-      const m = memoTexto.get(clave);
+    if (typeof v === 'string') {
+      const token = contenedor && posicion !== undefined ? tokenDe(contenedor, posicion, v) : undefined;
+      const m = token === undefined ? undefined : memoTokens.get(token);
       if (m !== undefined) { partes.push(`g${m}\n`); return; }
-      partes.push(typeof v === 'string' ? `V${rawUnicode(v)}\n` : `S${reprBytes(v.s)}\n`);
-      memoTexto.set(clave, poner());
+      partes.push(`V${rawUnicode(v)}\n`);
+      const id = poner();
+      if (token !== undefined) memoTokens.set(token, id);
       return;
     }
     const m = memoObj.get(v);
     if (m !== undefined) { partes.push(`g${m}\n`); return; }
+    if (v instanceof PyBytes) {
+      partes.push(`S${reprBytes(v.s)}\n`);
+      memoObj.set(v, poner());
+      return;
+    }
     if (Array.isArray(v)) {
       partes.push('(l');
       memoObj.set(v, poner());
-      for (const x of v) { escribir(x); partes.push('a'); }
+      v.forEach((x, i) => { escribir(x, v, String(i)); partes.push('a'); });
       return;
     }
     if (v instanceof PyDict) {
       partes.push('(d');
       memoObj.set(v, poner());
-      for (const [k, x] of v.entries) { escribir(k); escribir(x); partes.push('s'); }
+      v.entries.forEach(([k, x], i) => { escribir(k, v, `k${i}`); escribir(x, v, `v${i}`); partes.push('s'); });
       return;
     }
     if (v instanceof PyTuple) {
       partes.push('(');
-      for (const x of v.items) escribir(x);
+      v.items.forEach((x, i) => escribir(x, v.items, String(i)));
       partes.push('t');
       memoObj.set(v, poner());
       return;
@@ -360,7 +413,7 @@ export function escribirPickle(valor: Py): string {
     if (v instanceof PyObject) {
       if (v.kind === 'inst') {
         partes.push('(');
-        for (const x of v.args) escribir(x);
+        v.args.forEach((x, i) => escribir(x, v.args, String(i)));
         partes.push(`i${v.cls.module}\n${v.cls.name}\n`);
       } else {
         escribir(v.cls);

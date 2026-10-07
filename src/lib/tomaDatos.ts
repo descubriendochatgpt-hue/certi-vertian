@@ -23,8 +23,11 @@ export interface Opcion {
 export interface DefCampo {
   campo: string;
   etiqueta: string;
-  tipo: 'texto' | 'numero' | 'opcion' | 'si_no' | 'texto_largo';
+  /** «solucion»: una solución del catálogo de CE3X (ver lib/cex/catalogo.ts). */
+  tipo: 'texto' | 'numero' | 'opcion' | 'si_no' | 'texto_largo' | 'solucion';
   opciones?: Opcion[];
+  /** Para tipo «solucion»: de qué clase. */
+  solucion?: 'cerramiento' | 'hueco' | 'instalacion';
   rango?: Rango;
   /** Rango distinto según el valor de otro campo de la misma fila (p. ej. U según tipo de cerramiento). */
   rangoSegun?: (fila: Record<string, Valor>, tipoEdificio: TipoEdificio) => Rango | undefined;
@@ -90,6 +93,8 @@ export const CAMPOS_GENERALES: DefCampo[] = [
   },
   { campo: 'ventilacion', etiqueta: 'Ventilación', tipo: 'numero', rango: { min: 0, max: 10, avisoMin: 0.3, avisoMax: 1.5, unidad: 'ren/h' },
     ayuda: 'Renovaciones por hora. En residencial el valor de referencia es 0,63 ren/h.' },
+  { campo: 'descripcionVisita', etiqueta: 'Pruebas, comprobaciones e inspecciones realizadas', tipo: 'texto_largo',
+    ayuda: 'Texto del apartado del informe de CE3X. Lo redacta el procesado de la visita; revísalo.' },
   { campo: 'demandaAcs', etiqueta: 'Demanda diaria de ACS', tipo: 'numero', rango: { min: 0, max: 100000, avisoMin: 20, unidad: 'l/día' },
     rangoSegun: (_f, t) => (t === 'vivienda_unifamiliar' || t === 'vivienda_en_bloque' ? { min: 0, max: 100000, avisoMin: 20, avisoMax: 400, unidad: 'l/día' } : undefined) },
 ];
@@ -122,10 +127,15 @@ export const CAMPOS_CERRAMIENTO: DefCampo[] = [
   { campo: 'nombre', etiqueta: 'Nombre', tipo: 'texto', ayuda: 'Por ejemplo «Fachada norte salón».' },
   { campo: 'tipo', etiqueta: 'Tipo', tipo: 'opcion', opciones: TIPOS_CERRAMIENTO },
   { campo: 'orientacion', etiqueta: 'Orientación', tipo: 'opcion', opciones: ORIENTACIONES },
-  { campo: 'superficie', etiqueta: 'Superficie', tipo: 'numero', rango: { min: 0.01, max: 100000, avisoMin: 0.5, avisoMax: 5000, unidad: 'm²' } },
+  { campo: 'longitud', etiqueta: 'Largo', tipo: 'numero', rango: { min: 0.01, max: 10000, avisoMax: 200, unidad: 'm' } },
+  { campo: 'altura', etiqueta: 'Alto', tipo: 'numero', rango: { min: 0.01, max: 1000, avisoMin: 0.5, avisoMax: 50, unidad: 'm' } },
+  { campo: 'superficie', etiqueta: 'Superficie', tipo: 'numero', rango: { min: 0.01, max: 100000, avisoMin: 0.5, avisoMax: 5000, unidad: 'm²' },
+    ayuda: 'Si se deja vacía, largo × alto.' },
   { campo: 'u', etiqueta: 'Transmitancia U', tipo: 'numero', rango: { min: 0.01, max: 10, unidad: 'W/m²K' },
     rangoSegun: (f) => RANGO_U[String(f.tipo ?? '')] },
   { campo: 'origenU', etiqueta: 'Origen del valor de U', tipo: 'opcion', opciones: ORIGEN_DATO },
+  { campo: 'solucionCe3x', etiqueta: 'Solución de CE3X', tipo: 'solucion', solucion: 'cerramiento',
+    ayuda: 'La del catálogo que se copia al .cex. Vacía: la que encaje por tipo y U.' },
   { campo: 'notas', etiqueta: 'Notas (composición, aislamiento…)', tipo: 'texto_largo' },
 ];
 
@@ -134,7 +144,10 @@ export const CAMPOS_HUECO: DefCampo[] = [
   { campo: 'cerramiento', etiqueta: 'Cerramiento en el que está', tipo: 'texto', ayuda: 'Nombre del muro o cubierta.' },
   { campo: 'orientacion', etiqueta: 'Orientación', tipo: 'opcion', opciones: ORIENTACIONES },
   { campo: 'cantidad', etiqueta: 'Número de huecos iguales', tipo: 'numero', rango: { min: 1, max: 1000, avisoMax: 50 } },
-  { campo: 'superficie', etiqueta: 'Superficie de cada hueco', tipo: 'numero', rango: { min: 0.01, max: 500, avisoMin: 0.1, avisoMax: 50, unidad: 'm²' } },
+  { campo: 'alto', etiqueta: 'Alto de cada hueco', tipo: 'numero', rango: { min: 0.05, max: 50, avisoMin: 0.2, avisoMax: 5, unidad: 'm' } },
+  { campo: 'ancho', etiqueta: 'Ancho de cada hueco', tipo: 'numero', rango: { min: 0.05, max: 50, avisoMin: 0.2, avisoMax: 8, unidad: 'm' } },
+  { campo: 'superficie', etiqueta: 'Superficie de cada hueco', tipo: 'numero', rango: { min: 0.01, max: 500, avisoMin: 0.1, avisoMax: 50, unidad: 'm²' },
+    ayuda: 'Solo si no se tienen alto y ancho.' },
   {
     campo: 'tipoVidrio', etiqueta: 'Vidrio', tipo: 'opcion',
     opciones: op(['simple', 'Simple'], ['doble', 'Doble'], ['doble_be', 'Doble bajo emisivo'], ['triple', 'Triple'], ['otro', 'Otro']),
@@ -152,6 +165,8 @@ export const CAMPOS_HUECO: DefCampo[] = [
     campo: 'proteccionSolar', etiqueta: 'Protección solar', tipo: 'opcion',
     opciones: op(['ninguna', 'Ninguna'], ['persiana', 'Persiana / contraventana'], ['toldo', 'Toldo'], ['voladizo', 'Voladizo / retranqueo'], ['lamas', 'Lamas'], ['otra', 'Otra']),
   },
+  { campo: 'solucionCe3x', etiqueta: 'Solución de CE3X', tipo: 'solucion', solucion: 'hueco',
+    ayuda: 'La ventana del catálogo que se copia al .cex. Vacía: la que encaje por marco y vidrio.' },
   { campo: 'notas', etiqueta: 'Notas', tipo: 'texto_largo' },
 ];
 
@@ -204,6 +219,8 @@ export const CAMPOS_INSTALACION: DefCampo[] = [
     rangoSegun: () => ({ min: 1900, max: new Date().getFullYear(), avisoMin: 1960 }) },
   { campo: 'cobertura', etiqueta: 'Superficie o demanda que cubre', tipo: 'numero', rango: { min: 0, max: 100, avisoMin: 1, unidad: '%' } },
   { campo: 'acumulacion', etiqueta: 'Volumen de acumulación de ACS', tipo: 'numero', rango: { min: 0, max: 100000, avisoMin: 30, avisoMax: 5000, unidad: 'l' }, visibleSi: esAcs },
+  { campo: 'solucionCe3x', etiqueta: 'Solución de CE3X', tipo: 'solucion', solucion: 'instalacion',
+    ayuda: 'El equipo del catálogo que se copia al .cex. Vacía: el que encaje por servicio, generador y combustible.' },
   { campo: 'notas', etiqueta: 'Notas (marca, modelo, estado…)', tipo: 'texto_largo' },
 ];
 

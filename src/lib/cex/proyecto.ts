@@ -20,6 +20,8 @@ import { type Py, PyBytes, escribirPickles, leerPickles, texto } from './pickle'
 import type { Expediente } from '../estados';
 import type { TomaDatos, Valor } from '../tomaDatos';
 import { provinciaDeCodigoPostal } from '../encargosCrm';
+import { type Solucion, catalogoDePartida } from './catalogo';
+import { ponerElementos } from './elementos';
 
 export interface ProyectoCex {
   version: string;
@@ -82,7 +84,7 @@ export interface ResultadoCex {
  * de datos que se saben colocar. Lanza un error si la plantilla no está vacía
  * (para no arrastrar cerramientos o instalaciones de otro edificio).
  */
-export function rellenarPlantilla(plantilla: Uint8Array, exp: Expediente, toma: TomaDatos): ResultadoCex {
+export function rellenarPlantilla(plantilla: Uint8Array, exp: Expediente, toma: TomaDatos, catalogo: Solucion[] = catalogoDePartida()): ResultadoCex {
   const p = leerCex(plantilla);
   const n = contarElementos(p);
   if (n.cerramientos || n.huecos || n.puentes || n.instalaciones) {
@@ -183,15 +185,20 @@ export function rellenarPlantilla(plantilla: Uint8Array, exp: Expediente, toma: 
 
   avisos.push('Las posiciones de los datos del cliente se han deducido de un proyecto en el que cliente y técnico tenían los mismos datos: comprueba en CE3X la pantalla «Datos administrativos».');
 
-  // Lo que todavía no se escribe en el .cex
+  // ── Informe · pruebas, comprobaciones e inspecciones (bloque 11, texto libre) ──
+  const descripcion = txt(g.descripcionVisita);
+  if (descripcion) {
+    const informe = p.bloques[11];
+    if (Array.isArray(informe) && informe.length >= 8 && texto(informe[3]) !== undefined) poner(informe, 3, 'Informe: pruebas, comprobaciones e inspecciones', descripcion);
+    else pendientes.push('Informe: pruebas, comprobaciones e inspecciones (cópialo de la toma de datos)');
+  }
+
+  // ── Pantallas 3 y 4 · Envolvente e instalaciones (copias del catálogo) ──
+  for (const c of ponerElementos(p.bloques, toma, catalogo, pendientes)) rellenados.push({ etiqueta: c.etiqueta, antes: '', valor: c.valor });
   const cuenta = (k: keyof TomaDatos, nombre: string) => {
     const v = toma[k];
     if (Array.isArray(v) && v.length) pendientes.push(`${nombre}: ${v.length} (introdúcelos en CE3X con la ficha)`);
   };
-  cuenta('cerramientos', 'Cerramientos opacos');
-  cuenta('huecos', 'Huecos');
-  cuenta('puentesTermicos', 'Puentes térmicos');
-  cuenta('instalaciones', 'Instalaciones');
   cuenta('renovables', 'Renovables');
   cuenta('iluminacion', 'Iluminación');
 

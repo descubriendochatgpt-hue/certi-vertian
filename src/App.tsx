@@ -7,6 +7,7 @@ import { Expedientes } from './paginas/Expedientes';
 import { FormExpediente } from './paginas/FormExpediente';
 import { DetalleExpediente } from './paginas/DetalleExpediente';
 import { TomaDatos } from './paginas/TomaDatos';
+import { Visita } from './paginas/Visita';
 import { AvisoLegal } from './paginas/AvisoLegal';
 import { Resultados } from './paginas/Resultados';
 import { Revision } from './paginas/Revision';
@@ -38,6 +39,7 @@ export function App() {
           <Route path="expedientes/:id" element={<DetalleExpediente />} />
           <Route path="expedientes/:id/editar" element={<FormExpediente />} />
           <Route path="expedientes/:id/toma-datos" element={<TomaDatos />} />
+          <Route path="expedientes/:id/visita" element={<Visita />} />
           <Route path="expedientes/:id/resultados" element={<Resultados />} />
           <Route path="expedientes/:id/revision" element={<Revision />} />
           <Route path="expedientes/:id/paquete" element={<Paquete />} />

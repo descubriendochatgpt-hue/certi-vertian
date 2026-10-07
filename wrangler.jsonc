@@ -1,18 +1,30 @@
 // Publicación en Cloudflare Workers (la misma cuenta que el CRM).
-// CertiVertian es una web estática: el Worker solo sirve los ficheros de
-// dist/. Los datos van directamente del navegador a Supabase.
-// Las claves NO van aquí: VITE_SUPABASE_URL y VITE_SUPABASE_CLAVE_PUBLICA se
-// ponen en Cloudflare → Workers → certi-vertian → Settings → Build →
-// Variables and secrets (se usan al compilar). Ver README, paso 6.
+// El Worker sirve la web de dist/ y atiende /api/… (worker/index.ts):
+// transcripción de la visita (Workers AI), procesado con Claude y Catastro.
+// Los datos de los expedientes van directamente del navegador a Supabase.
+//
+// Las claves NO van aquí:
+//  · Al compilar (Settings → Build → Variables and secrets):
+//    VITE_SUPABASE_URL y VITE_SUPABASE_CLAVE_PUBLICA.
+//  · Al ejecutar (Settings → Variables and Secrets, tipo «Secret»):
+//    ANTHROPIC_API_KEY, SUPABASE_URL y SUPABASE_CLAVE_PUBLICA.
+// Ver README, paso 6.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "certi-vertian",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-09-01",
   "assets": {
     "directory": "./dist",
     // Cualquier ruta (/expedientes/…) la resuelve la propia app
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    // /api/… lo atiende el Worker; lo demás son ficheros de la web
+    "run_worker_first": ["/api/*"]
   },
+  // Transcripción de la visita (Whisper en Workers AI)
+  "ai": { "binding": "AI" },
+  // Conserva las variables puestas en el panel al desplegar
+  "keep_vars": true,
   "observability": {
     "enabled": true
   }

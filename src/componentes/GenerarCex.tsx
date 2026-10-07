@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Expediente } from '../lib/estados';
 import type { TomaDatos } from '../lib/tomaDatos';
-import { type PlantillaCex, guardarPlantillaCex, obtenerPlantillaCex } from '../lib/api';
+import { type PlantillaCex, borrarSolucion, guardarPlantillaCex, guardarSoluciones, listarCatalogo, obtenerPlantillaCex } from '../lib/api';
+import { type Solucion, aprenderDeCex, catalogoDePartida, unirCatalogos } from '../lib/cex/catalogo';
 import { fechaHora } from '../lib/fechas';
 import { type ResultadoCex, escribirCex, leerCex, nombreCex, rellenarPlantilla } from '../lib/cex/proyecto';
 
@@ -16,7 +17,33 @@ export function GenerarCex({ exp, toma, enTomaDatos = false }: { exp: Expediente
   const [error, setError] = useState('');
   const [cambiando, setCambiando] = useState(false);
 
-  useEffect(() => { obtenerPlantillaCex().then(setPlantilla).catch(() => setPlantilla(null)); }, []);
+  const [propias, setPropias] = useState<Solucion[]>([]);
+  const [aprendido, setAprendido] = useState('');
+
+  useEffect(() => {
+    obtenerPlantillaCex().then(setPlantilla).catch(() => setPlantilla(null));
+    listarCatalogo().then(setPropias).catch(() => undefined);
+  }, []);
+
+  const catalogo = unirCatalogos(propias, catalogoDePartida());
+
+  async function aprender(ficheros: FileList | null) {
+    if (!ficheros?.length) return;
+    setError('');
+    setAprendido('');
+    try {
+      let nuevas = 0, vistas = 0;
+      for (const f of Array.from(ficheros)) {
+        const soluciones = aprenderDeCex(new Uint8Array(await f.arrayBuffer()), f.name.slice(0, 300));
+        vistas += soluciones.length;
+        nuevas += await guardarSoluciones(soluciones);
+      }
+      setPropias(await listarCatalogo());
+      setAprendido(`${vistas} solución(es) encontradas, ${nuevas} nuevas en tu catálogo.`);
+    } catch (e) {
+      setError(`${(e as Error).message}${/catalogo_ce3x|relation|schema cache/i.test((e as Error).message) ? ' (¿falta ejecutar la migración 07?)' : ''}`);
+    }
+  }
 
   function descargar(r: ResultadoCex) {
     const url = URL.createObjectURL(new Blob([escribirCex(r.proyecto) as Uint8Array<ArrayBuffer>], { type: 'application/octet-stream' }));
@@ -31,7 +58,7 @@ export function GenerarCex({ exp, toma, enTomaDatos = false }: { exp: Expediente
     setError('');
     if (!toma) { setError('Este expediente aún no tiene toma de datos.'); return; }
     try {
-      const r = rellenarPlantilla(bytes, exp, toma);
+      const r = rellenarPlantilla(bytes, exp, toma, catalogo);
       setResultado(r);
       descargar(r);
     } catch (e) {
@@ -90,6 +117,38 @@ export function GenerarCex({ exp, toma, enTomaDatos = false }: { exp: Expediente
         </p>
       )}
       {(plantilla === null || cambiando) && elegir}
+      <details className="catalogo-ce3x">
+        <summary>Catálogo de soluciones de CE3X ({catalogo.filter((c) => c.tipo !== 'puente').length})</summary>
+        <p className="suave">
+          Los muros, ventanas y equipos se copian al .cex desde proyectos reales de CE3X: así nunca llega a CE3X un valor que no
+          reconozca. Sube proyectos tuyos ya terminados (.cex) para enseñarle más soluciones; de ellos solo se guardan la
+          envolvente y las instalaciones, nunca los datos del cliente.
+        </p>
+        <div className="campo">
+          <label htmlFor={`aprender-cex-${enTomaDatos ? 't' : 'f'}`}>Añadir proyectos de CE3X</label>
+          <input id={`aprender-cex-${enTomaDatos ? 't' : 'f'}`} type="file" accept=".cex" multiple
+                 onChange={(e) => { void aprender(e.target.files); e.target.value = ''; }} />
+        </div>
+        {aprendido && <div className="caja info" role="status">{aprendido}</div>}
+        {(['cerramiento', 'hueco', 'instalacion'] as const).map((t) => (
+          <div key={t}>
+            <h3>{t === 'cerramiento' ? 'Cerramientos' : t === 'hueco' ? 'Huecos' : 'Instalaciones'}</h3>
+            <ul className="lista-simple">
+              {catalogo.filter((c) => c.tipo === t).map((c) => (
+                <li key={c.clave}>
+                  {c.etiqueta} <small className="suave">· {c.origen}</small>
+                  {propias.some((x) => x.clave === c.clave) && (
+                    <> <button type="button" className="enlace peligro" onClick={async () => {
+                      if (!confirm('¿Quitar esta solución del catálogo?')) return;
+                      try { await borrarSolucion(c.clave); setPropias(await listarCatalogo()); } catch (e) { setError((e as Error).message); }
+                    }}>Quitar</button></>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </details>
       {error && <div className="caja error">{error}</div>}
       {resultado && (
         <details className="resultado-cex" open>

@@ -7,6 +7,8 @@ import type { AnotacionHistorial, Calificacion, Estado, Expediente } from './est
 import { type TomaDatos, VERSION_ESQUEMA, normalizarTomaDatos } from './tomaDatos';
 import { type Resultados, resultadosVacios } from './resultados';
 import type { EncargoCrm } from './encargosCrm';
+import { type Solucion, catalogoDePartida, unirCatalogos } from './cex/catalogo';
+import type { PropuestaVisita } from './visita';
 
 export class ErrorDatos extends Error {}
 
@@ -325,4 +327,69 @@ export async function guardarPlantillaCex(nombre: string, version: string, bytes
     tecnico_id: data.user?.id, nombre: nombre.slice(0, 200), version: version.slice(0, 100),
     contenido: aBase64(bytes), subida_en: new Date().toISOString(),
   }));
+}
+
+// ───────────────────── Catálogo de CE3X (migración 07) ────────────────────
+
+/** Soluciones aprendidas de los proyectos del técnico ([] si aún no está la migración 07). */
+export async function listarCatalogo(): Promise<Solucion[]> {
+  const r = await supabase.from('catalogo_ce3x').select('clave, tipo, etiqueta, ce3x, datos, composicion, origen').order('creada_en');
+  if (r.error || !r.data) return [];
+  return (r.data as (Omit<Solucion, 'composicion'> & { composicion: string | null })[])
+    .map((s) => ({ ...s, composicion: s.composicion ?? undefined }));
+}
+
+/** Guarda las soluciones nuevas (las que ya estaban se ignoran). Devuelve cuántas se han añadido. */
+/** Las soluciones del técnico más las del proyecto de ejemplo incluido en la aplicación. */
+export async function catalogoCompleto(): Promise<Solucion[]> {
+  return unirCatalogos(await listarCatalogo(), catalogoDePartida());
+}
+
+export async function guardarSoluciones(nuevas: Solucion[]): Promise<number> {
+  const ya = new Set((await listarCatalogo()).map((s) => s.clave));
+  const filas = nuevas.filter((s) => !ya.has(s.clave)).map((s) => ({
+    clave: s.clave, tipo: s.tipo, etiqueta: s.etiqueta.slice(0, 1000), ce3x: s.ce3x, datos: s.datos,
+    composicion: s.composicion ?? null, origen: s.origen.slice(0, 300),
+  }));
+  if (filas.length) comprobar(await supabase.from('catalogo_ce3x').insert(filas));
+  return filas.length;
+}
+
+export async function borrarSolucion(clave: string): Promise<void> {
+  comprobar(await supabase.from('catalogo_ce3x').delete().eq('clave', clave));
+}
+
+// ───────────────────────── Visitas grabadas (migración 07) ────────────────
+
+export interface VisitaProcesada {
+  id: string;
+  expediente_id: string;
+  grabada_en: string;
+  procesada_en: string;
+  duracion_s: number | null;
+  fotos: number;
+  transcripcion: string;
+  propuesta: PropuestaVisita;
+  aplicada_en: string | null;
+}
+
+export async function listarVisitas(expedienteId: string): Promise<VisitaProcesada[]> {
+  const r = await supabase.from('visitas').select('*').eq('expediente_id', expedienteId).order('procesada_en', { ascending: false });
+  if (r.error) return [];
+  return r.data as VisitaProcesada[];
+}
+
+export async function guardarVisita(v: Omit<VisitaProcesada, 'id' | 'procesada_en' | 'aplicada_en'>): Promise<VisitaProcesada> {
+  return comprobar(await supabase.from('visitas').insert(v).select('*').single()) as VisitaProcesada;
+}
+
+export async function marcarVisitaAplicada(id: string): Promise<void> {
+  comprobar(await supabase.from('visitas').update({ aplicada_en: new Date().toISOString() }).eq('id', id));
+}
+
+/** Token de la sesión, para llamar a la API propia (/api/…). */
+export async function tokenSesion(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new ErrorDatos('La sesión ha caducado. Vuelve a entrar.');
+  return session.access_token;
 }
