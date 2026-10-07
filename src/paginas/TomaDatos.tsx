@@ -4,12 +4,14 @@ import { cambiarEstado, guardarTomaDatos, obtenerExpediente, obtenerTomaDatos } 
 import { DECLARACION_ESTADO, type Expediente, esResidencial } from '../lib/estados';
 import { diasHasta, fecha, fechaHora } from '../lib/fechas';
 import {
-  CAMPOS_GENERALES, type DefCampo, type DefSeccion, type Fila, SECCIONES, type TomaDatos as Datos, type Valor,
+  CAMPOS_ADMINISTRATIVOS, CAMPOS_GENERALES, type DefCampo, type DefSeccion, type Fila, SECCIONES, type TomaDatos as Datos, type Valor,
   comprobarTomaDatos, rangoDe, tomaDatosVacia,
 } from '../lib/tomaDatos';
 import { comprobarRango } from '../lib/validaciones';
 import { CampoNumero, CampoOpcion, CampoSiNo, CampoTexto, ConfirmarAvisos } from '../componentes/Campos';
 import { ImportarDatos } from '../componentes/ImportarDatos';
+import { AsistenteVoz } from '../componentes/AsistenteVoz';
+import { GenerarCex } from '../componentes/GenerarCex';
 import { aplicarPropuesta } from '../lib/importarDatos';
 import { type CopiaLocal, borrarCopiaLocal, guardarCopiaLocal, leerCopiaLocal } from '../lib/copiaLocal';
 
@@ -202,7 +204,22 @@ export function TomaDatos() {
 
       {error && <div className="caja error">{error}</div>}
 
+      <GenerarCex exp={exp} toma={datos} enTomaDatos />
+
+      {editable && <AsistenteVoz exp={exp} datos={datos} onCambio={(d) => cambiar(d)} />}
+
       {editable && <ImportarDatos datos={datos} onAplicar={(elementos) => cambiar(aplicarPropuesta(datos, elementos, nuevoId))} />}
+
+      <details className="seccion">
+        <summary>Datos administrativos (CE3X)</summary>
+        <p className="suave">Dirección, referencia catastral y propietario se toman del expediente.</p>
+        <div className="rejilla-campos">
+          {CAMPOS_ADMINISTRATIVOS.map((def) => (
+            <CampoDef key={def.campo} def={def} fila={datos.generales} tipoEdificio={exp.tipo_edificio} deshabilitado={!editable}
+                      onCambio={(v) => cambiar({ ...datos, generales: { ...datos.generales, [def.campo]: v } })} />
+          ))}
+        </div>
+      </details>
 
       <details className="seccion" open>
         <summary>Datos generales</summary>

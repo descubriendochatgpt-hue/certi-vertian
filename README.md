@@ -76,6 +76,8 @@ avisa sin cambiar nada.
    (tipos de documento para el registro).
 7. Y con [`supabase/migrations/20261007090000_05_encargos_crm.sql`](supabase/migrations/20261007090000_05_encargos_crm.sql)
    (lectura de los encargos de certificado del CRM; ver «Conexión con el CRM»).
+8. Y con [`supabase/migrations/20261008090000_06_plantilla_cex.sql`](supabase/migrations/20261008090000_06_plantilla_cex.sql)
+   (tu plantilla de CE3X guardada y la dirección del cliente desde el CRM).
 
 Ejecútalos **en ese orden** y **una sola vez** cada uno. Si ya tenías instalados algunos, ejecuta solo los que
 faltan.
@@ -252,7 +254,45 @@ expediente al lado de lo que hay ahora en el CRM. Pulsa **Usar** en lo que quier
 - Solo lo ven las cuentas autorizadas en `tecnicos`, con la verificación en dos pasos.
 - Si en el CRM se borran los datos de un cliente (derecho de supresión), el expediente se conserva sin el enlace.
 
-## Rellenar por voz, texto o archivo
+## Asistente por voz para CE3X
+
+En la toma de datos, **🎙 Empezar el asistente** te guía por las cuatro pantallas de CE3X, en su orden:
+
+1. **Datos administrativos:** nombre del edificio, grado de protección y datos del cliente. Dirección, catastro y
+   propietario ya salen del expediente.
+2. **Datos generales:** normativa, año, zona climática, superficies, viviendas, plantas y ACS.
+3. **Envolvente térmica:** describes cada elemento («fachada norte de 25 metros cuadrados», «ventana sur de 1,20
+   por 1,50, doble vidrio») y solo te pregunta lo que falte (superficie, orientación, vidrio, marco…). Di
+   «terminado» para pasar a lo siguiente.
+4. **Instalaciones:** igual, con cada equipo («caldera de gas natural para calefacción y ACS de 24 kilovatios»).
+
+Cómo te pregunta:
+- Lee cada pregunta en voz alta y escucha tu respuesta. Si quitas «Manos libres», pulsa «Escuchar» cada vez.
+  También puedes responder escribiendo.
+- Entiende números dichos («ochenta y cinco coma cinco», «mil novecientos setenta») y medidas («1,20 por 1,50»).
+- Puedes decir «saltar», «atrás», «repetir», «terminado» o «parar».
+- **No pregunta** lo que ya está en el expediente o en la toma de datos, ni los valores que CE3X pone por defecto
+  (altura libre 2,7 m, ventilación 0,63 ren/h, masa media, «Sin patrón», rendimientos estimados…).
+- En una vivienda pone solo el uso «residencial privado» y una unidad de uso.
+
+Lo que dictas va a los campos de la toma de datos. Ahí lo ves, lo corriges y pasa las comprobaciones de siempre.
+
+## Generar el .cex desde la toma de datos
+
+Arriba de la toma de datos está **Fichero para CE3X → ⬇ Generar .cex**.
+
+- **La primera vez** te pide tu **plantilla**: en CE3X, un proyecto nuevo con solo tus datos de técnico,
+  guardado. Se queda guardada (solo la ves tú) y no hay que volver a elegirla.
+- **El .cex sale con las pantallas 1 y 2 de CE3X rellenas:**
+  - edificio: nombre, dirección, provincia, localidad, código postal, catastro, protección y uso;
+  - cliente: nombre, dirección, localidad, código postal, provincia, teléfono y email;
+  - datos generales: normativa, tipo, año, zona, superficies, viviendas, plantas y ACS.
+
+  Al descargarlo te enseña qué ha puesto y qué queda por completar.
+- **Envolvente e instalaciones todavía no** se escriben en el .cex: se introducen en CE3X con la «Ficha para
+  CE3X». CE3X guarda con cada elemento valores que calcula él mismo, y hace falta un proyecto de prueba de cada tipo
+  para escribirlos sin riesgo.
+
 
 En la toma de datos, el apartado **Rellenar por voz, texto o archivo** ahorra teclear campo a campo:
 

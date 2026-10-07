@@ -40,6 +40,27 @@ export const ORIENTACIONES = op(
   ['S', 'Sur'], ['SO', 'Suroeste'], ['O', 'Oeste'], ['NO', 'Noroeste'], ['H', 'Horizontal'],
 );
 
+// ─────────────────────── Datos administrativos (CE3X) ─────────────────────
+// Pantalla «Datos administrativos» de CE3X: lo que no está ya en el expediente
+// (dirección, municipio, referencia catastral, propietario…). Se guardan en
+// `generales` junto a los datos generales.
+
+export const CAMPOS_ADMINISTRATIVOS: DefCampo[] = [
+  { campo: 'nombreEdificio', etiqueta: 'Nombre del edificio', tipo: 'texto', ayuda: 'Si se deja vacío, se usa la dirección.' },
+  {
+    campo: 'gradoProteccion', etiqueta: 'Grado de protección', tipo: 'opcion',
+    opciones: op(['ninguna', 'Ninguna'], ['protegido', 'Protegido (elegir el grado en CE3X)']),
+  },
+  {
+    campo: 'usoEdificio', etiqueta: 'Uso del edificio', tipo: 'opcion',
+    opciones: op(['residencial_privado', 'Residencial privado'], ['residencial_publico', 'Residencial público'], ['otro', 'Otro (elegir en CE3X)']),
+  },
+  { campo: 'clienteDireccion', etiqueta: 'Dirección del cliente', tipo: 'texto' },
+  { campo: 'clienteLocalidad', etiqueta: 'Localidad del cliente', tipo: 'texto' },
+  { campo: 'clienteCodigoPostal', etiqueta: 'Código postal del cliente', tipo: 'texto' },
+  { campo: 'clienteProvincia', etiqueta: 'Provincia del cliente', tipo: 'texto' },
+];
+
 // ───────────────────────────── Datos generales ────────────────────────────
 
 export const CAMPOS_GENERALES: DefCampo[] = [
@@ -52,10 +73,17 @@ export const CAMPOS_GENERALES: DefCampo[] = [
     campo: 'normativa', etiqueta: 'Normativa vigente en la construcción', tipo: 'opcion',
     opciones: op(['anterior_ct79', 'Anterior a la NBE-CT-79'], ['ct79', 'NBE-CT-79'], ['cte2006', 'CTE 2006'], ['cte2013', 'CTE 2013'], ['cte2019', 'CTE 2019']),
   },
-  { campo: 'superficieUtil', etiqueta: 'Superficie útil habitable', tipo: 'numero', rango: { min: 1, max: 100000, unidad: 'm²' },
+  { campo: 'anioConstruccion', etiqueta: 'Año de construcción', tipo: 'numero',
+    rangoSegun: () => ({ min: 1500, max: new Date().getFullYear() + 3, avisoMin: 1850, avisoMax: new Date().getFullYear() }),
+    ayuda: 'Solo si no está en el expediente.' },
+  { campo: 'superficieUtilRd390', etiqueta: 'Superficie útil (RD 390/2021)', tipo: 'numero', rango: { min: 1, max: 1000000, unidad: 'm²' } },
+  { campo: 'superficieUtil', etiqueta: 'Superficie útil habitable (cálculo CTE DB-HE)', tipo: 'numero', rango: { min: 1, max: 100000, unidad: 'm²' },
     rangoSegun: (_f, t) => (esResidencial(t) && t !== 'bloque_viviendas' ? { min: 1, max: 100000, avisoMin: 20, avisoMax: 600, unidad: 'm²' } : undefined) },
   { campo: 'alturaLibre', etiqueta: 'Altura libre de planta', tipo: 'numero', rango: { min: 1.5, max: 20, avisoMin: 2.2, avisoMax: 4.5, unidad: 'm' } },
+  { campo: 'numeroViviendas', etiqueta: 'Nº de viviendas / unidades de uso', tipo: 'numero', rango: { min: 1, max: 10000, avisoMax: 300 } },
   { campo: 'numeroPlantas', etiqueta: 'Número de plantas habitables', tipo: 'numero', rango: { min: 1, max: 100, avisoMax: 20 } },
+  { campo: 'plantasSobreRasante', etiqueta: 'Número de plantas sobre rasante', tipo: 'numero', rango: { min: 0, max: 200, avisoMax: 40 } },
+  { campo: 'plantasBajoRasante', etiqueta: 'Número de plantas bajo rasante', tipo: 'numero', rango: { min: 0, max: 20, avisoMax: 6 } },
   {
     campo: 'masaParticiones', etiqueta: 'Masa de las particiones interiores', tipo: 'opcion',
     opciones: op(['ligera', 'Ligera'], ['media', 'Media'], ['pesada', 'Pesada']),

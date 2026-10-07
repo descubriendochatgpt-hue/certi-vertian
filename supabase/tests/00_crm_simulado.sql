@@ -4,7 +4,7 @@
 create table public.lineas_negocio (id smallint primary key, slug text not null unique);
 create table public.clientes (
   id uuid primary key default gen_random_uuid(), nombre text not null, razon_social text, nif text,
-  email text, telefono text, provincia text
+  email text, telefono text, provincia text, direccion text, codigo_postal text, ciudad text
 );
 create table public.pedidos (
   id uuid primary key default gen_random_uuid(),
