@@ -34,3 +34,16 @@ Para volver a tratar un lead ya registrado, borra su línea de `enviados.csv`.
 ## Leads
 
 La lista está en `leads.csv`. Cada email lleva la web de la que salió (columna `fuente`).
+
+## Campaña de automatización (mercados artesanos y ecológicos)
+
+Está en la subcarpeta `automatizacion/`, con su propio `config.json`, `plantilla.html`, `sectores/`
+(`organizador`, `alimentacion`, `artesania`), `leads.csv` y registro de enviados. Se usa igual que la de
+certificados, añadiendo `--campana automatizacion`:
+
+    python3 campana.py --campana automatizacion vista-previa
+    python3 campana.py --campana automatizacion borradores
+
+Leads: la Asociación Cultural Mercado Ecológico y Artesano (organiza el MAE en Gijón y Oviedo), los socios del
+mercado que publican su email en <https://mercadoartesanoyecologico.com/socios/> y productores pequeños de las
+zonas de Gijón, Avilés y Oviedo del catálogo Tasting Asturias de Asturex.

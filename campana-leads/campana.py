@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Campaña de correo a inmobiliarias y empresas de reformas (Vertian Solutions).
+"""Campañas de correo de Vertian Solutions.
 
 Solo usa la biblioteca estándar de Python. Uso:
 
   python3 campana.py vista-previa        # genera salida/*.html para revisar cada correo
   python3 campana.py borradores          # guarda un borrador por lead en Gmail
   python3 campana.py enviar --pausa 90   # envía de verdad, con pausa entre correos
+
+Sin --campana se usa la campaña de certificados (los ficheros de esta carpeta).
+Con --campana automatizacion se usan los de la subcarpeta automatizacion/.
 
 Para «borradores» y «enviar» hacen falta dos variables de entorno (o un fichero
 .env en esta carpeta):
@@ -32,7 +35,8 @@ from email.utils import formataddr, make_msgid
 from pathlib import Path
 
 CARPETA = Path(__file__).resolve().parent
-REGISTRO = CARPETA / "enviados.csv"
+# Carpeta de la campaña activa: config, plantilla, sectores, leads y registro de enviados
+CAMPANA = CARPETA
 
 
 def cargar_env():
@@ -47,21 +51,27 @@ def cargar_env():
 def cargar_config():
     import json
 
-    return json.loads((CARPETA / "config.json").read_text(encoding="utf-8"))
+    return json.loads((CAMPANA / "config.json").read_text(encoding="utf-8"))
 
 
 def cargar_leads():
-    with open(CARPETA / "leads.csv", newline="", encoding="utf-8") as f:
+    with open(CAMPANA / "leads.csv", newline="", encoding="utf-8") as f:
         leads = [fila for fila in csv.DictReader(f) if fila.get("email", "").strip()]
     for lead in leads:
         lead["email"] = lead["email"].strip().lower()
         lead["tipo"] = lead.get("tipo", "").strip().lower() or "inmobiliaria"
-        if not (CARPETA / "sectores" / f"{lead['tipo']}.html").exists():
-            sys.exit(f"Tipo desconocido «{lead['tipo']}» para {lead['empresa']} (usa inmobiliaria o reformas)")
+        if not (CAMPANA / "sectores" / f"{lead['tipo']}.html").exists():
+            tipos = ", ".join(sorted(f.stem for f in (CAMPANA / "sectores").glob("*.html")))
+            sys.exit(f"Tipo desconocido «{lead['tipo']}» para {lead['empresa']} (usa: {tipos})")
     return leads
 
 
+def registro():
+    return CAMPANA / "enviados.csv"
+
+
 def ya_tratados():
+    REGISTRO = registro()
     if not REGISTRO.exists():
         return set()
     with open(REGISTRO, newline="", encoding="utf-8") as f:
@@ -69,6 +79,7 @@ def ya_tratados():
 
 
 def apuntar(lead, modo):
+    REGISTRO = registro()
     nuevo = not REGISTRO.exists()
     with open(REGISTRO, "a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -87,12 +98,12 @@ def componer(lead, config):
         **esc,
         "empresa": html.escape(lead["empresa"].strip()),
         "firma_telefono_enlace": "+34" + re.sub(r"\D", "", config["firma_telefono"]),
-        "parrafo_sector": (CARPETA / "sectores" / f"{lead['tipo']}.html").read_text(encoding="utf-8").strip(),
+        "parrafo_sector": (CAMPANA / "sectores" / f"{lead['tipo']}.html").read_text(encoding="utf-8").strip(),
         "personalizacion": f"<p>{html.escape(lead['personalizacion'].strip())}</p>"
         if lead.get("personalizacion", "").strip()
         else "",
     }
-    cuerpo_html = rellenar((CARPETA / "plantilla.html").read_text(encoding="utf-8"), datos)
+    cuerpo_html = rellenar((CAMPANA / "plantilla.html").read_text(encoding="utf-8"), datos)
     asunto = rellenar(config["asunto"], {"empresa": lead["empresa"].strip()})
     return asunto, cuerpo_html
 
@@ -145,14 +156,20 @@ def main():
     p.add_argument("modo", choices=["vista-previa", "borradores", "enviar"])
     p.add_argument("--pausa", type=int, default=90, help="segundos entre envíos (modo enviar)")
     p.add_argument("--limite", type=int, default=0, help="tratar como mucho N leads en esta tanda")
+    p.add_argument("--campana", default="", help="subcarpeta de la campaña (p. ej. automatizacion)")
     args = p.parse_args()
+
+    global CAMPANA
+    CAMPANA = CARPETA / args.campana if args.campana else CARPETA
+    if not (CAMPANA / "config.json").exists():
+        sys.exit(f"No existe la campaña {CAMPANA}")
 
     cargar_env()
     config = cargar_config()
     leads = cargar_leads()
 
     if args.modo == "vista-previa":
-        salida = CARPETA / "salida"
+        salida = CAMPANA / "salida"
         salida.mkdir(exist_ok=True)
         logo = (CARPETA / "logo-vertian.png").as_uri()
         for i, lead in enumerate(leads, 1):
